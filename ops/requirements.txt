@@ -1,0 +1,9 @@
+pyaqsapi
+pandas
+pyarrow
+python-dotenv
+ruff
+black
+pytest
+pandera
+
