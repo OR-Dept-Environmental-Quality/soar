@@ -1,5 +1,13 @@
 """Pipeline orchestration for AQS monitors."""
 from __future__ import annotations
+import sys
+from pathlib import Path
+
+# When running this module directly (python -m pipelines.aqs.monitors_run)
+# the repository's `src` directory may not be on sys.path. Prepend it so
+# `import soar` works from the repo root.
+ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT / "src"))
 
 from soar import config
 from soar.aqs.extractors.monitors import fetch_monitors

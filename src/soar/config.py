@@ -6,8 +6,6 @@ from datetime import date
 from pathlib import Path
 
 from dotenv import load_dotenv
-from pyaqsapi import aqs_credentials
-
 load_dotenv()
 
 AQS_EMAIL = os.getenv("AQS_EMAIL")
@@ -31,4 +29,16 @@ def set_aqs_credentials() -> None:
     """Validate the configured credentials and register them with pyaqsapi."""
     if not AQS_EMAIL or not AQS_KEY:
         raise ValueError("Missing AQS_EMAIL or AQS_KEY in environment")
+
+    # Import pyaqsapi only when credentials are actually needed. This avoids
+    # forcing the dependency (and transitive deps like 'requests') at import
+    # time which makes tests and light-weight uses easier.
+    try:
+        from pyaqsapi import aqs_credentials
+    except Exception as exc:  # pragma: no cover - helpful runtime message
+        raise ImportError(
+            "The 'pyaqsapi' package is required to set AQS credentials. "
+            "Install it into your environment (pip install pyaqsapi) and ensure its "
+            "dependencies such as 'requests' are available.") from exc
+
     aqs_credentials(AQS_EMAIL, AQS_KEY)
