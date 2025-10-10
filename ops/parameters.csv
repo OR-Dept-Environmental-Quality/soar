@@ -1,0 +1,12 @@
+AQS_Parameter,AQS_Name,CASN,CASNND,AVG_MASS,TRV_Acute,TRV_Cancer,TRV_NonCancer,EIS_Name,EIS_Grouping,EIS_HAP_Type,EIS_Pollutant_Category
+45201,Benzene,71-43-2,71432,78.114,29,0.13,3,Benzene,HAP,HAP-VOC,Benzene
+42101,Carbon monoxide,630-08-0,630080,28.01,NF,NF,NF,Not Found,Not Found,Not Found,Not Found
+85101,PM10 - LC,0,0,NF,NF,NF,NF,PM10 Filterable,CAP,,PM10 Filterable
+81102,PM10 Total 0-10um STP,0,0,NF,NF,NF,NF,Not Found,Not Found,Not Found,Not Found
+86101,PM10-2.5 - Local Conditions,0,0,NF,NF,NF,NF,Not Found,Not Found,Not Found,Not Found
+81103,PM10-2.5 STP,0,0,NF,NF,NF,NF,Not Found,Not Found,Not Found,Not Found
+88101,PM2.5 - Local Conditions,0,0,NF,NF,NF,NF,PM2.5 Filterable,CAP,,PM2.5 Filterable
+88501,PM2.5 Raw Data,0,0,NF,NF,NF,NF,Not Found,Not Found,Not Found,Not Found
+43505,Acrolein - Unverified,107-02-8,107028,56.064,6.9,--,0.35,Acrolein,HAP,HAP-VOC,Acrolein
+43509,Acrolein - Verified,107-02-8,107028,56.064,6.9,--,0.35,Acrolein,HAP,HAP-VOC,Acrolein
+43704,Acrylonitrile,107-13-1,107131,53.064,220,0.015,5,Acrylonitrile,HAP,HAP-VOC,Acrylonitrile

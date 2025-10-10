@@ -13,10 +13,15 @@ AQS_KEY = os.getenv("AQS_KEY")
 STATE = (os.getenv("STATE_CODE") or "").zfill(2)
 BDATE = date.fromisoformat(os.environ["BDATE"])
 EDATE = date.fromisoformat(os.environ["EDATE"])
+START_YEAR = BDATE.year
+END_YEAR = EDATE.year
 ROOT = Path(os.environ["DATAREPO_ROOT"]).expanduser()
 RAW = ROOT / "raw" / "aqs" / "monitors"
 TRANS = ROOT / "transform" / "aqs" / "monitors"
 STAGED = ROOT / "staged" / "aqs" / "monitors"
+RAW_ANNUAL = ROOT / "raw" / "aqs" / "annual"
+CTL_DIR = ROOT / "raw" / "aqs" / "_ctl"
+PARAMS_CSV = Path("ops/parameters.csv")
 
 
 def ensure_dirs(*paths: Path) -> None:

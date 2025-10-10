@@ -1,49 +1,51 @@
 # Copilot Instructions for Soar Data Pipeline
 
-## Overview
-This repository implements modular Python pipelines for ingesting EPA AQS data into a local filesystem data lake, supporting downstream analytics (e.g., Power BI).
+## What this repo does
+Small, well-scoped Python pipelines that pull EPA AQS monitor data and write it into a local filesystem "data lake" (raw -> transform/curated -> staged). Pipelines live under `pipelines/` and reusable logic lives in `src/soar/`.
 
-## Architecture
-- **src/soar/**: Core library code. Organized by domain:
-  - `config.py`: Configuration management.
-  - `aqs/extractors/monitors.py`: Data extraction logic for EPA AQS monitors.
-  - `aqs/transformers/monitors.py`: Data transformation logic.
-  - `loaders/filesystem.py`: Handles writing data to the local filesystem.
-- **pipelines/aqs/monitors_run.py**: Entry point for running the AQS pipeline. Orchestrates extraction, transformation, and loading.
-- **tests/**: Contains unit tests (e.g., `test_monitors.py`).
-- **ops/requirements.txt**: Python dependencies.
+## Quick architecture map
+- `src/soar/config.py` — environment and paths (BDATE/EDATE, DATAREPO_ROOT, AQS credentials). Important: `set_aqs_credentials()` delays importing `pyaqsapi` until runtime.
+- `src/soar/aqs/extractors/*.py` — fetchers that call external AQS services (network code should be isolated here).
+- `src/soar/aqs/transformers/*.py` — pure data transformations operating on pandas DataFrames (easy to unit-test). Example pipeline chain in `pipelines/aqs/monitors_run.py`: fetch_monitors -> add_site_id -> to_curated -> to_staged.
+- `src/soar/loaders/filesystem.py` — single-purpose I/O helpers (write_csv/write_parquet) that create parent dirs.
+- `pipelines/aqs/monitors_run.py` — orchestrator that wires config, extraction, transform, and loaders and writes outputs under `DATAREPO_ROOT`.
 
-## Developer Workflow
-- **Environment Setup**:
-  - Use a virtual environment (`python -m venv .venv; .\.venv\Scripts\activate`).
-  - Install dependencies: `pip install -r ops/requirements.txt`.
-  - Create a `.env` file in the repo root with required keys (see README for example).
-- **Running Pipelines**:
-  - Set `PYTHONPATH=src` before running pipeline scripts.
-  - Main pipeline: `python pipelines/aqs/monitors_run.py`.
-- **Testing & Quality**:
-  - Run checks: `ruff check .`, `black --check .`, `pytest -q`.
-- **Data Output**:
-  - Pipeline writes to `raw/`, `transform/`, and `staged/` under `DATAREPO_ROOT`.
+## Developer workflows and exact commands
+- Create and activate a venv (Windows PowerShell):
+  - `python -m venv .venv; .\\.venv\\Scripts\\Activate.ps1`
+- Install dependencies (project root):
+  - `pip install -r ops/requirements.txt`
+- Run the monitors pipeline (from repo root):
+  - `set PYTHONPATH=src; python pipelines/aqs/monitors_run.py` (PowerShell)
+  - or `python -m pipelines.aqs.monitors_run` (module mode; the script inserts `src` onto sys.path)
+- Run tests and linters (after installing requirements):
+  - `ruff check .`
+  - `black --check .`
+  - `pytest -q`
 
-## Project-Specific Patterns
-- **Modular Design**: Extraction, transformation, and loading are separated by submodules for maintainability and extensibility.
-- **Configuration**: All environment/configuration is managed via `.env` and `config.py`.
-- **Explicit Data Flow**: Pipelines are orchestrated via scripts in `pipelines/`, not via CLI or API entrypoints.
-- **Testing**: Tests are in `tests/` and should cover core logic in `src/soar/`.
+## Concrete repository conventions agents should follow
+- Environment variables are authoritative and parsed in `src/soar/config.py`:
+  - Required: `BDATE`, `EDATE`, `DATAREPO_ROOT`
+  - Credentials: `AQS_EMAIL`, `AQS_KEY` (used by `config.set_aqs_credentials()`)
+  - Optional: `STATE_CODE` (config zero-pads to 2 digits)
+- Avoid importing heavy network dependencies at module import time. The repo intentionally delays importing `pyaqsapi` until `config.set_aqs_credentials()` so unit tests and simple static analysis won't require network or requests.
+- Prefer pure pandas DataFrame inputs/outputs for transformer functions so tests can construct in-memory frames (see `tests/test_monitors.py`).
+- Write small helpers in `src/soar/loaders/filesystem.py` for any file writes — they already handle parent-dir creation.
 
-## Integration Points
-- **EPA AQS API**: Credentials and parameters are set via `.env`.
-- **Filesystem**: All outputs are written to the local data lake structure defined by `DATAREPO_ROOT`.
+## Integration and runtime notes
+- Runtime dependency for parquet: ensure `pyarrow` or `fastparquet` is installed when writing parquet files (parquet writing is used in `pipelines/aqs/monitors_run.py`). This is not declared in code; check `ops/requirements.txt`.
+- `pyaqsapi` is only required when actually contacting the EPA AQS API. Tests operate on local DataFrames and do not call external services.
 
-## Example: Adding a New Data Source
-1. Create new extractor/transformer modules under `src/soar/aqs/`.
-2. Update or add pipeline scripts in `pipelines/`.
-3. Add tests in `tests/`.
+## Example code patterns to cite in PRs or edits
+- To add a new extractor, mirror `src/soar/aqs/extractors/monitors.py` and add a pipeline entrypoint in `pipelines/aqs/` that:
+  1. calls `config.ensure_dirs()`
+  2. calls `config.set_aqs_credentials()` only if network access is needed
+  3. runs fetch -> transform -> stage -> write
+- Tests should construct DataFrames directly (see `tests/test_monitors.py:: _build_sample_frame`) and validate transformer output with `pandera` schemas where helpful.
 
-## References
-- See `README.md` for quickstart and environment details.
-- Key files: `src/soar/config.py`, `src/soar/aqs/extractors/monitors.py`, `src/soar/aqs/transformers/monitors.py`, `src/soar/loaders/filesystem.py`, `pipelines/aqs/monitors_run.py`.
+## What agents must NOT assume
+- Do not assume `src` is on sys.path — pipelines either add it (see `monitors_run.py`) or callers must set `PYTHONPATH`.
+- Do not assume `pyaqsapi` is installed; only import it at runtime if the change requires actual API calls.
 
 ---
-**Feedback:** Please review and suggest edits for any unclear or missing sections.
+**If anything in these instructions is unclear or missing, tell me which parts you'd like expanded (env examples, ops/requirements quick check, or common PR templates) and I'll iterate.**
