@@ -11,8 +11,15 @@ load_dotenv()
 AQS_EMAIL = os.getenv("AQS_EMAIL")
 AQS_KEY = os.getenv("AQS_KEY")
 STATE = (os.getenv("STATE_CODE") or "").zfill(2)
+
+# Read raw BDATE/EDATE from environment. Keep the original values available but
+# expose helpers that enforce repository policy (minimum start date 2005-01-01).
 BDATE = date.fromisoformat(os.environ["BDATE"])
 EDATE = date.fromisoformat(os.environ["EDATE"])
+
+# Policy: do not allow BDATE earlier than 2005-01-01. Callers should use
+# `clamped_bdate()` where they want the policy-enforced start date.
+_MIN_BDATE = date(2005, 1, 1)
 START_YEAR = BDATE.year
 END_YEAR = EDATE.year
 ROOT = Path(os.environ["DATAREPO_ROOT"]).expanduser()
@@ -22,6 +29,9 @@ STAGED = ROOT / "staged" / "aqs" / "monitors"
 RAW_ANNUAL = ROOT / "raw" / "aqs" / "annual"
 CTL_DIR = ROOT / "raw" / "aqs" / "_ctl"
 PARAMS_CSV = Path("ops/parameters.csv")
+SAMPLE_MODE = os.getenv("SAMPLE_MODE", "by_state")
+# When a by_state response is very large, a fallback to per-site mode could be used.
+SAMPLE_FALLBACK_ROW_THRESHOLD = int(os.getenv("SAMPLE_FALLBACK_ROW_THRESHOLD", "200000"))
 
 
 def ensure_dirs(*paths: Path) -> None:
@@ -47,3 +57,13 @@ def set_aqs_credentials() -> None:
             "dependencies such as 'requests' are available.") from exc
 
     aqs_credentials(AQS_EMAIL, AQS_KEY)
+
+
+def clamped_bdate() -> date:
+    """Return BDATE but clamped to the repository minimum _MIN_BDATE.
+
+    Pipelines should call this helper when deciding which start date to use
+    for AQS API requests so historical backfills won't request data earlier
+    than 2005-01-01 even if the environment BDATE is set earlier.
+    """
+    return BDATE if BDATE >= _MIN_BDATE else _MIN_BDATE

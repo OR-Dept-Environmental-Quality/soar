@@ -15,7 +15,7 @@ soar/
         monitors.py
     loaders/
       filesystem.py
-  pipelines/aqs/monitors_run.py
+   pipelines/aqs/metadata_run.py
   tests/test_monitors.py
   ops/requirements.txt
 ```
@@ -31,6 +31,11 @@ soar/
    ```powershell
    pip install -r ops/requirements.txt
    ```
+   Optionally install development tooling:
+   ```powershell
+   pip install pre-commit
+   pre-commit install
+   ```
 3. **Create a `.env` file** in the repository root with:
    ```env
    AQS_EMAIL=your-email
@@ -40,10 +45,16 @@ soar/
    EDATE=2024-12-31
    DATAREPO_ROOT=C:\Users\abiberi\Oregon\DEQ - Air Data Team - DataRepo\soar
    ```
-4. **Run the monitors pipeline**
+4. **Run the metadata (monitors) pipeline**
    ```powershell
    set PYTHONPATH=src
-   python pipelines/aqs/monitors_run.py
+   python pipelines/aqs/metadata_run.py
+   ```
+   
+5. **Run the sample-level pipeline**
+   ```powershell
+   set PYTHONPATH=src
+   python pipelines/aqs/sample_run.py
    ```
 5. **Execute unit tests and quality checks**
    ```powershell
@@ -51,5 +62,9 @@ soar/
    black --check .
    pytest -q
    ```
+
+Additional files
+- `.env.template` contains required environment keys and example values; copy to `.env` and fill in secrets.
+- `.pre-commit-config.yaml` is provided; run `pre-commit install` to enable local checks.
 
 Outputs write to the `raw/`, `transform/`, and `staged/` subdirectories under the configured `DATAREPO_ROOT` path. Re-run the pipeline to refresh the data as needed.

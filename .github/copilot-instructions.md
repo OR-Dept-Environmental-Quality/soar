@@ -6,18 +6,21 @@ Small, well-scoped Python pipelines that pull EPA AQS monitor data and write it 
 ## Quick architecture map
 - `src/soar/config.py` — environment and paths (BDATE/EDATE, DATAREPO_ROOT, AQS credentials). Important: `set_aqs_credentials()` delays importing `pyaqsapi` until runtime.
 - `src/soar/aqs/extractors/*.py` — fetchers that call external AQS services (network code should be isolated here).
-- `src/soar/aqs/transformers/*.py` — pure data transformations operating on pandas DataFrames (easy to unit-test). Example pipeline chain in `pipelines/aqs/monitors_run.py`: fetch_monitors -> add_site_id -> to_curated -> to_staged.
+Note: transformation logic is being redesigned; the previous `src/soar/aqs/transformers/` module has been removed. Pipelines currently write raw outputs only.
 - `src/soar/loaders/filesystem.py` — single-purpose I/O helpers (write_csv/write_parquet) that create parent dirs.
-- `pipelines/aqs/monitors_run.py` — orchestrator that wires config, extraction, transform, and loaders and writes outputs under `DATAREPO_ROOT`.
+- `pipelines/aqs/metadata_run.py` — orchestrator that wires config, extraction, transform, and loaders and writes outputs under `DATAREPO_ROOT`.
 
 ## Developer workflows and exact commands
 - Create and activate a venv (Windows PowerShell):
   - `python -m venv .venv; .\\.venv\\Scripts\\Activate.ps1`
 - Install dependencies (project root):
   - `pip install -r ops/requirements.txt`
-- Run the monitors pipeline (from repo root):
-  - `set PYTHONPATH=src; python pipelines/aqs/monitors_run.py` (PowerShell)
-  - or `python -m pipelines.aqs.monitors_run` (module mode; the script inserts `src` onto sys.path)
+- Run the metadata pipeline (from repo root):
+  - `set PYTHONPATH=src; python pipelines/aqs/metadata_run.py` (PowerShell)
+  - or `python -m pipelines.aqs.metadata_run` (module mode; the script inserts `src` onto sys.path)
+- Run the sample-level pipeline (from repo root):
+  - `set PYTHONPATH=src; python pipelines/aqs/sample_run.py` (PowerShell)
+  - or `python -m pipelines.aqs.sample_run` (module mode)
 - Run tests and linters (after installing requirements):
   - `ruff check .`
   - `black --check .`
@@ -33,7 +36,7 @@ Small, well-scoped Python pipelines that pull EPA AQS monitor data and write it 
 - Write small helpers in `src/soar/loaders/filesystem.py` for any file writes — they already handle parent-dir creation.
 
 ## Integration and runtime notes
-- Runtime dependency for parquet: ensure `pyarrow` or `fastparquet` is installed when writing parquet files (parquet writing is used in `pipelines/aqs/monitors_run.py`). This is not declared in code; check `ops/requirements.txt`.
+-- Runtime dependency for parquet: ensure `pyarrow` or `fastparquet` is installed when writing parquet files (parquet writing may be used by metadata pipelines). This is not declared in code; check `ops/requirements.txt`.
 - `pyaqsapi` is only required when actually contacting the EPA AQS API. Tests operate on local DataFrames and do not call external services.
 
 ## Example code patterns to cite in PRs or edits
@@ -44,7 +47,7 @@ Small, well-scoped Python pipelines that pull EPA AQS monitor data and write it 
 - Tests should construct DataFrames directly (see `tests/test_monitors.py:: _build_sample_frame`) and validate transformer output with `pandera` schemas where helpful.
 
 ## What agents must NOT assume
-- Do not assume `src` is on sys.path — pipelines either add it (see `monitors_run.py`) or callers must set `PYTHONPATH`.
+-- Do not assume `src` is on sys.path — pipelines either add it (see `metadata_run.py` or `sample_run.py`) or callers must set `PYTHONPATH`.
 - Do not assume `pyaqsapi` is installed; only import it at runtime if the change requires actual API calls.
 
 ---
