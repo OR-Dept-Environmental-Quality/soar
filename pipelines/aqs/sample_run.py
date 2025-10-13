@@ -16,20 +16,21 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from soar import config
 from soar.aqs.extractors.site_extractors import fetch_monitors, build_aqs_requests, fetch_aqs_response
-from soar.aqs.extractors.data import fetch_samples_dispatch
+from soar.aqs.extractors.sample import fetch_samples_dispatch
+from soar.aqs.extractors.data import write_annual_for_parameter
 from soar.loaders.filesystem import write_csv, append_csv
 from soar.aqs import _client
 import pandas as pd
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-RAW_DIR = config.RAW
+SAMPLE_BASE_DIR = config.RAW_SAMPLE
 DEFAULT_WORKERS = 4
 
 
 def _write_parameter_outputs(param_label: str, frame: pd.DataFrame) -> None:
-    RAW_DIR.mkdir(parents=True, exist_ok=True)
+    SAMPLE_BASE_DIR.mkdir(parents=True, exist_ok=True)
     safe_label = _sanitize_filename(param_label)
-    csv_path = RAW_DIR / f"aqs_sample_{safe_label}.csv"
+    csv_path = SAMPLE_BASE_DIR / f"aqs_sample_{safe_label}.csv"
     write_csv(frame, csv_path)
 
 
@@ -57,7 +58,7 @@ def _process_parameter(param_code: str, param_label: str, bdate: str, edate: str
         for year_token, df in res:
             if df is None or df.empty:
                 continue
-            year_dir = RAW_DIR / year_token
+            year_dir = SAMPLE_BASE_DIR / year_token
             year_dir.mkdir(parents=True, exist_ok=True)
             year_csv = year_dir / f"aqs_sample_{safe_label}.csv"
             append_csv(df, year_csv)
@@ -67,10 +68,17 @@ def _process_parameter(param_code: str, param_label: str, bdate: str, edate: str
         df_all = res
         if df_all is None or df_all.empty:
             return param_label, 0
-        # append all rows into the default RAW file (no year subfolders known here)
-        csv_path = RAW_DIR / f"aqs_sample_{safe_label}.csv"
+        # append all rows into a legacy sample file at the root sample folder
+        SAMPLE_BASE_DIR.mkdir(parents=True, exist_ok=True)
+        csv_path = SAMPLE_BASE_DIR / f"aqs_sample_{safe_label}.csv"
         append_csv(df_all, csv_path)
         total += len(df_all)
+
+    # write annual aggregates to RAW_ANNUAL (best effort, ignore errors per parameter)
+    try:
+        write_annual_for_parameter(param_code, param_label, bdate, edate, state)
+    except Exception as exc:  # pragma: no cover - runtime safety
+        print(f"Annual data fetch failed for {param_label} ({param_code}): {exc}")
 
     return param_label, total
 
@@ -104,7 +112,7 @@ def _sanitize_filename(name: str, max_len: int = 80) -> str:
 
 
 def run(workers: int = DEFAULT_WORKERS) -> None:
-    config.ensure_dirs(config.RAW, config.TRANS, config.STAGED)
+    config.ensure_dirs(config.RAW_SAMPLE, config.RAW_ANNUAL, config.TRANS, config.STAGED)
     config.set_aqs_credentials()
 
     # Short-circuit if AQS is currently marked unhealthy by the circuit-breaker

@@ -78,8 +78,10 @@ def run() -> None:
     params: list[tuple[str, str]] = []
     if params_path.exists():
         dfp = pd.read_csv(params_path, dtype=str)
-        if "aqs_parameter" in dfp.columns and "analyte_name" in dfp.columns:
-            params = list(dfp[["aqs_parameter", "analyte_name"]].dropna().itertuples(index=False, name=None))
+        # accept either 'analyte_name' or the legacy 'aqs_name' column
+        if "aqs_parameter" in dfp.columns and ("analyte_name" in dfp.columns or "aqs_name" in dfp.columns):
+            name_col = "analyte_name" if "analyte_name" in dfp.columns else "aqs_name"
+            params = list(dfp[["aqs_parameter", name_col]].dropna().itertuples(index=False, name=None))
         else:
             # write an error manifest and stop
             from soar.loaders.filesystem import atomic_write_json

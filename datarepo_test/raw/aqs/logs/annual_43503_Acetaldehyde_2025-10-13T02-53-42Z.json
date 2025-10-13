@@ -1,0 +1,11 @@
+{
+  "parameter": "43503",
+  "analyte_name": "Acetaldehyde",
+  "years": {
+    "2023": {
+      "rows": 11,
+      "path": "C:\\Users\\abiberi\\Oregon\\DEQ - Air Data Team - DataRepo\\soar_pipeline\\datarepo_test\\raw\\aqs\\annual\\2023\\aqs_annual_Acetaldehyde.csv"
+    }
+  },
+  "status": "ok"
+}

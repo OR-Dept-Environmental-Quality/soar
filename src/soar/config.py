@@ -24,6 +24,7 @@ START_YEAR = BDATE.year
 END_YEAR = EDATE.year
 ROOT = Path(os.environ["DATAREPO_ROOT"]).expanduser()
 RAW = ROOT / "raw" / "aqs" / "monitors"
+RAW_SAMPLE = ROOT / "raw" / "aqs" / "sample"
 TRANS = ROOT / "transform" / "aqs" / "monitors"
 STAGED = ROOT / "staged" / "aqs" / "monitors"
 RAW_ANNUAL = ROOT / "raw" / "aqs" / "annual"

@@ -1,0 +1,11 @@
+{
+  "parameter": "85136",
+  "analyte_name": "Nickel, Total",
+  "years": {
+    "2023": {
+      "rows": 14,
+      "path": "C:\\Users\\abiberi\\Oregon\\DEQ - Air Data Team - DataRepo\\soar_pipeline\\datarepo_test\\raw\\aqs\\annual\\2023\\aqs_annual_Nickel-Total.csv"
+    }
+  },
+  "status": "ok"
+}

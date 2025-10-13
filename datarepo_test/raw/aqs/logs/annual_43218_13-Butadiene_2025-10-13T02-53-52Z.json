@@ -1,0 +1,11 @@
+{
+  "parameter": "43218",
+  "analyte_name": "1,3-Butadiene",
+  "years": {
+    "2023": {
+      "rows": 7,
+      "path": "C:\\Users\\abiberi\\Oregon\\DEQ - Air Data Team - DataRepo\\soar_pipeline\\datarepo_test\\raw\\aqs\\annual\\2023\\aqs_annual_13-Butadiene.csv"
+    }
+  },
+  "status": "ok"
+}

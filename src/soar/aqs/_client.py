@@ -75,6 +75,9 @@ def _open_circuit() -> None:
 
 
 def _reset_circuit() -> None:
+    state = _read_health()
+    if state.get("consecutive_failures", 0) == 0 and not state.get("opened_at"):
+        return
     _write_health({"consecutive_failures": 0, "opened_at": None})
 
 
@@ -194,7 +197,21 @@ def fetch_json(session: requests.Session, url: str) -> dict:
 
 def fetch_df(session: requests.Session, url: str) -> pd.DataFrame:
     js = fetch_json(session, url)
-    data = js[1] if isinstance(js, list) and len(js) > 1 else []
+
+    data = []
+    if isinstance(js, list):
+        # Common pattern: [metadata, data]
+        if len(js) > 1 and isinstance(js[1], list):
+            data = js[1]
+        elif js and isinstance(js[0], list):
+            data = js[0]
+    elif isinstance(js, dict):
+        for key in ("Data", "data", "Results", "results", "rows"):
+            value = js.get(key)
+            if isinstance(value, list):
+                data = value
+                break
+
     if not data:
         return pd.DataFrame()
     return pd.DataFrame(data)

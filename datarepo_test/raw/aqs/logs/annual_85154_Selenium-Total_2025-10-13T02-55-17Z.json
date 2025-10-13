@@ -1,0 +1,11 @@
+{
+  "parameter": "85154",
+  "analyte_name": "Selenium, Total",
+  "years": {
+    "2023": {
+      "rows": 14,
+      "path": "C:\\Users\\abiberi\\Oregon\\DEQ - Air Data Team - DataRepo\\soar_pipeline\\datarepo_test\\raw\\aqs\\annual\\2023\\aqs_annual_Selenium-Total.csv"
+    }
+  },
+  "status": "ok"
+}
