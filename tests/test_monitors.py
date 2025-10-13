@@ -4,7 +4,7 @@ from __future__ import annotations
 import pandas as pd
 import pandera as pa
 
-from soar.aqs.transformers.monitors import add_site_id, to_curated, to_staged
+from aqs.transformers.monitors import add_site_id, to_curated, to_staged
 
 
 CURATED_SCHEMA = pa.DataFrameSchema(

@@ -17,7 +17,7 @@ import requests
 from urllib.parse import parse_qs, urlparse
 from email.utils import parsedate_to_datetime
 
-from soar import config
+import config
 
 # Simple global rate limiter state
 _last_request_time = 0.0
@@ -61,7 +61,7 @@ def _read_health() -> dict:
 
 
 def _write_health(state: dict) -> None:
-    from soar.loaders.filesystem import atomic_write_json
+    from loaders.filesystem import atomic_write_json
 
     path = _health_path()
     atomic_write_json(path, state)

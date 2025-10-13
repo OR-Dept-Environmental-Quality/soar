@@ -14,12 +14,12 @@ import re
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
 
-from soar import config
-from soar.aqs.extractors.site_extractors import fetch_monitors, build_aqs_requests, fetch_aqs_response
-from soar.aqs.extractors.sample import fetch_samples_dispatch
-from soar.aqs.extractors.data import write_annual_for_parameter
-from soar.loaders.filesystem import write_csv, append_csv
-from soar.aqs import _client
+import config
+from aqs.extractors.site_extractors import fetch_monitors, build_aqs_requests, fetch_aqs_response
+from aqs.extractors.sample import fetch_samples_dispatch
+from aqs.extractors.data import write_annual_for_parameter
+from loaders.filesystem import write_csv, append_csv
+from aqs import _client
 import pandas as pd
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -117,7 +117,7 @@ def run(workers: int = DEFAULT_WORKERS) -> None:
 
     # Short-circuit if AQS is currently marked unhealthy by the circuit-breaker
     if _client.circuit_is_open():
-        from soar.loaders.filesystem import atomic_write_json
+        from loaders.filesystem import atomic_write_json
 
         manifest_dir = Path(__file__).resolve().parents[2] / "metadata"
         manifest_dir.mkdir(parents=True, exist_ok=True)

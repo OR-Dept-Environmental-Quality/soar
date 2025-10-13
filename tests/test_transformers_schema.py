@@ -1,6 +1,6 @@
 import pandas as pd
-from soar.aqs.transformers.monitors import add_site_id, to_curated, to_staged
-from soar.schemas.monitors import schema_curated, schema_staged
+from aqs.transformers.monitors import add_site_id, to_curated, to_staged
+from schemas.monitors import schema_curated, schema_staged
 
 
 def _build_sample_frame():

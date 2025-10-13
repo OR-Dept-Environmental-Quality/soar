@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 
 import requests
 
-from soar.aqs import _client
+from aqs import _client
 
 
 class DummyResp:

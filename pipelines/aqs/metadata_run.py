@@ -15,11 +15,11 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
 
-from soar import config
-from soar.aqs.extractors.site_extractors import fetch_monitors
-from soar.loaders.filesystem import write_csv
+import config
+from aqs.extractors.site_extractors import fetch_monitors
+from loaders.filesystem import write_csv
 import pandas as pd
-from soar.aqs import _client
+from aqs import _client
 import json
 from pathlib import Path
 import re
@@ -39,7 +39,7 @@ def run() -> None:
 
     # Short-circuit if AQS is currently marked unhealthy by the circuit-breaker
     if _client.circuit_is_open():
-        from soar.loaders.filesystem import atomic_write_json
+        from loaders.filesystem import atomic_write_json
 
         metadata_dir = Path(__file__).resolve().parents[2] / "metadata"
         metadata_dir.mkdir(parents=True, exist_ok=True)
@@ -84,7 +84,7 @@ def run() -> None:
             params = list(dfp[["aqs_parameter", name_col]].dropna().itertuples(index=False, name=None))
         else:
             # write an error manifest and stop
-            from soar.loaders.filesystem import atomic_write_json
+            from loaders.filesystem import atomic_write_json
 
             metadata_dir.mkdir(parents=True, exist_ok=True)
             atomic_write_json(metadata_dir / "aqsSiteParameters_error.json", {
@@ -94,7 +94,7 @@ def run() -> None:
             raise KeyError("metadata/aqsSiteParameters.csv must contain 'aqs_parameter' and 'analyte_name' columns")
     else:
         # No fallback allowed: write a clear missing manifest and stop
-        from soar.loaders.filesystem import atomic_write_json
+        from loaders.filesystem import atomic_write_json
 
         metadata_dir.mkdir(parents=True, exist_ok=True)
         atomic_write_json(metadata_dir / "aqsSiteParameters_missing.json", {

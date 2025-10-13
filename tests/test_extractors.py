@@ -1,7 +1,7 @@
 import pandas as pd
 import pytest
 
-from soar.aqs.extractors import monitors
+from aqs.extractors import monitors
 
 
 def test_build_aqs_requests_splits_years():
