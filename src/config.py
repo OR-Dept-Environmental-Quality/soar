@@ -1,4 +1,9 @@
-"""Core configuration for the soar package."""
+"""Configuration module for SOAR AQS data pipeline.
+
+Loads environment variables, defines data lake paths, and provides utilities for
+credential management and date policy enforcement. All paths point to the data lake
+(DATAREPO_ROOT), not the code repository.
+"""
 from __future__ import annotations
 
 import os
@@ -8,48 +13,76 @@ from pathlib import Path
 from dotenv import load_dotenv
 load_dotenv()
 
+# EPA AQS API credentials
 AQS_EMAIL = os.getenv("AQS_EMAIL")
 AQS_KEY = os.getenv("AQS_KEY")
+
+# State FIPS code (zero-padded to 2 digits)
 STATE = (os.getenv("STATE_CODE") or "").zfill(2)
 
-# Read raw BDATE/EDATE from environment. Keep the original values available but
-# expose helpers that enforce repository policy (minimum start date 2005-01-01).
+# Date range for data extraction
+# Raw values from environment - use clamped_bdate() for policy-enforced dates
 BDATE = date.fromisoformat(os.environ["BDATE"])
 EDATE = date.fromisoformat(os.environ["EDATE"])
 
-# Policy: do not allow BDATE earlier than 2005-01-01. Callers should use
-# `clamped_bdate()` where they want the policy-enforced start date.
+# Repository policy: no data extraction before 2005-01-01
+# Use clamped_bdate() in pipelines to enforce this constraint
 _MIN_BDATE = date(2005, 1, 1)
 START_YEAR = BDATE.year
 END_YEAR = EDATE.year
+
+# Data lake root and layer paths
+# All output written to DATAREPO_ROOT data lake, organized by layer and service
 ROOT = Path(os.environ["DATAREPO_ROOT"]).expanduser()
-RAW = ROOT / "raw" / "aqs" / "monitors"
-RAW_SAMPLE = ROOT / "raw" / "aqs" / "sample"
-RAW_DAILY = ROOT / "raw" / "aqs" / "daily"
-RAW_ANNUAL = ROOT / "raw" / "aqs" / "annual"
-TRANS = ROOT / "transform" / "aqs" / "monitors"
-STAGED = ROOT / "staged" / "aqs" / "monitors"
-CTL_DIR = ROOT / "raw" / "aqs" / "_ctl"
+RAW = ROOT / "raw" / "aqs" / "monitors"  # Legacy monitors path
+RAW_SAMPLE = ROOT / "raw" / "aqs" / "sample"  # Sample data (hourly/sub-daily)
+RAW_DAILY = ROOT / "raw" / "aqs" / "daily"  # Daily summaries
+RAW_ANNUAL = ROOT / "raw" / "aqs" / "annual"  # Annual aggregates
+TRANS = ROOT / "transform" / "aqs" / "monitors"  # Transformed/curated layer
+STAGED = ROOT / "staged" / "aqs" / "monitors"  # Staged layer for analytics
+CTL_DIR = ROOT / "raw" / "aqs" / "_ctl"  # Control files (circuit breaker health, etc.)
+
+# Parameter definitions
 PARAMS_CSV = Path("ops/parameters.csv")
+
+# Sample extraction mode: "by_state" (default) or "by_site" (legacy)
+# by_state: Fetch all sites at once, memory-efficient streaming
+# by_site: Fetch site-by-site, slower but more granular
 SAMPLE_MODE = os.getenv("SAMPLE_MODE", "by_state")
-# When a by_state response is very large, a fallback to per-site mode could be used.
+
+# Fallback threshold: if by_state response exceeds this row count, fall back to by_site mode
 SAMPLE_FALLBACK_ROW_THRESHOLD = int(os.getenv("SAMPLE_FALLBACK_ROW_THRESHOLD", "200000"))
 
 
 def ensure_dirs(*paths: Path) -> None:
-    """Create any missing directories for the provided paths."""
+    """Create directory structures for data lake layers.
+    
+    Creates any missing directories in the provided paths. Used during pipeline
+    initialization to ensure output directories exist before writing data.
+    
+    Args:
+        *paths: One or more Path objects to create
+    """
     for path in paths:
         path.mkdir(parents=True, exist_ok=True)
 
 
 def set_aqs_credentials() -> None:
-    """Validate the configured credentials and register them with pyaqsapi."""
+    """Validate and register EPA AQS API credentials with pyaqsapi library.
+    
+    Lazy-loads pyaqsapi dependency to avoid requiring network libraries at module
+    import time. This allows tests and lightweight scripts to import config without
+    pulling in requests and other heavy dependencies.
+    
+    Raises:
+        ValueError: If AQS_EMAIL or AQS_KEY environment variables are missing
+        ImportError: If pyaqsapi package is not installed
+    """
     if not AQS_EMAIL or not AQS_KEY:
         raise ValueError("Missing AQS_EMAIL or AQS_KEY in environment")
 
-    # Import pyaqsapi only when credentials are actually needed. This avoids
-    # forcing the dependency (and transitive deps like 'requests') at import
-    # time which makes tests and light-weight uses easier.
+    # Lazy import: only load pyaqsapi when credentials are actually needed
+    # This avoids forcing the dependency at module import time
     try:
         from pyaqsapi import aqs_credentials
     except Exception as exc:  # pragma: no cover - helpful runtime message

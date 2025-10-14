@@ -1,7 +1,12 @@
 """AQS service pipeline orchestration for sample, annual, and daily data.
 
-This runner orchestrates all AQS data ingestion services (sample, annual, daily)
-and writes per-parameter outputs organized by group_store and year.
+This pipeline extracts air quality data from EPA's AQS API for three service types:
+- Sample data: Hourly/sub-daily measurements from monitoring stations
+- Annual data: Annual statistical aggregates (mean, max, percentiles, etc.)
+- Daily data: Daily statistical summaries (mean, max, AQI, etc.)
+
+Output files are organized by pollutant group_store (toxics, pm25, ozone, other) and year,
+with all files written directly to service folders (no year subdirectories).
 """
 from __future__ import annotations
 import sys
@@ -9,7 +14,8 @@ from pathlib import Path
 from urllib.parse import urlparse, parse_qs
 import re
 
-# Ensure src is importable when running this module directly
+# Add src directory to Python path for direct module execution
+# Allows running: python pipelines/aqs/aqs_service_run.py
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
 
@@ -35,54 +41,66 @@ def _write_parameter_outputs(param_label: str, frame: pd.DataFrame) -> None:
 
 
 def _process_parameter(param_code: str, param_label: str, bdate: str, edate: str, state: str) -> tuple[str, int]:
-    """Stream-fetch samples for a parameter and append results to group-based CSVs.
-
-        This function streams sample data for a parameter and appends results to
-        per-group, per-year CSV files. File naming: aqs_sample_{group_store}_{year}.csv
-        where group_store comes from dimPollutant.csv (toxics, pm25, ozone, other, etc.)
-        
-        Behavior depends on `config.SAMPLE_MODE`:
-        - by_state: `fetch_samples_dispatch` yields (year_token, DataFrame) tuples
-            containing all sites for the parameter in that year; each yielded frame
-            is appended immediately to aqs_sample_{group}_{year}.csv.
-        - by_site (legacy): `fetch_samples_dispatch` returns a single DataFrame
-            containing concatenated per-site results; the full DataFrame is appended
-            to the default per-parameter CSV.
+    """Extract and write all three data types (sample, annual, daily) for one parameter.
+    
+    This function coordinates the extraction of sample, annual, and daily data for a single
+    air quality parameter. Data is organized by group_store category and written to CSV files.
+    
+    Args:
+        param_code: AQS parameter code (e.g., "44201" for Ozone)
+        param_label: Human-readable parameter name (e.g., "Ozone")
+        bdate: Begin date in YYYYMMDD format
+        edate: End date in YYYYMMDD format
+        state: State FIPS code (e.g., "41" for Oregon)
+    
+    Returns:
+        Tuple of (parameter_name, total_sample_rows_written)
+    
+    Output files:
+        - raw/aqs/sample/aqs_sample_{group_store}_{year}.csv
+        - raw/aqs/annual/aqs_annual_{group_store}_{year}.csv  
+        - raw/aqs/daily/aqs_daily_{group_store}_{year}.csv
+    
+    Note: Annual and daily extractions use best-effort error handling; failures are logged
+    but don't stop sample data extraction.
     """
     group_store = get_parameter_group(param_code)
     total = 0
 
-    # Dispatch to configured mode. For by_state mode `fetch_samples_dispatch`
-    # returns a generator yielding (year_token, DataFrame) tuples. For the
-    # legacy per-site behavior it returns a single DataFrame object.
+    # Check if response is a generator (by_state mode) or DataFrame (legacy by_site mode)
+    # by_state mode: yields (year, DataFrame) tuples for memory-efficient yearly streaming
+    # by_site mode: returns single concatenated DataFrame with all years
     res = fetch_samples_dispatch(param_code, bdate, edate, state)
     if hasattr(res, "__iter__") and not isinstance(res, pd.DataFrame):
-        # by_state generator - write to group-based year files (no year folders)
+        # Streaming mode: process yearly data chunks as they arrive
+        # Writes to: raw/aqs/sample/aqs_sample_{group_store}_{year}.csv
         SAMPLE_BASE_DIR.mkdir(parents=True, exist_ok=True)
         for year_token, df in res:
             if df is None or df.empty:
                 continue
             year_csv = SAMPLE_BASE_DIR / f"aqs_sample_{group_store}_{year_token}.csv"
-            append_csv(df, year_csv)
+            append_csv(df, year_csv)  # Appends to existing file or creates with header
             total += len(df)
     else:
-        # legacy per-site DataFrame - write to group-based file at root
+        # Legacy batch mode: entire dataset returned at once
+        # Writes to: raw/aqs/sample/aqs_sample_{group_store}.csv (no year in filename)
         df_all = res
         if df_all is None or df_all.empty:
             return param_label, 0
-        # append all rows into a legacy sample file at the root sample folder
         SAMPLE_BASE_DIR.mkdir(parents=True, exist_ok=True)
         csv_path = SAMPLE_BASE_DIR / f"aqs_sample_{group_store}.csv"
         append_csv(df_all, csv_path)
         total += len(df_all)
 
-    # write annual aggregates to RAW_ANNUAL (best effort, ignore errors per parameter)
+    # Extract annual aggregates (mean, max, percentiles by year)
+    # Best-effort: failures logged but don't stop sample extraction
     try:
         write_annual_for_parameter(param_code, param_label, bdate, edate, state, group_store=group_store)
     except Exception as exc:  # pragma: no cover - runtime safety
         print(f"Annual data fetch failed for {param_label} ({param_code}): {exc}")
 
-    # write daily summaries to RAW_DAILY (best effort, ignore errors per parameter)
+    # Extract daily summaries (daily mean, max, AQI by date)
+    # Best-effort: failures logged but don't stop sample extraction
     try:
         write_daily_for_parameter(param_code, param_label, bdate, edate, state, group_store=group_store)
     except Exception as exc:  # pragma: no cover - runtime safety
@@ -92,25 +110,35 @@ def _process_parameter(param_code: str, param_label: str, bdate: str, edate: str
 
 
 def _sanitize_filename(name: str, max_len: int = 80) -> str:
-    """Return a filesystem-safe token based on `name`.
-
-    Behavior:
-    - normalize whitespace to single dashes
-    - remove characters that are not alphanumeric, dash, underscore, or dot
-    - collapse repeated separators
-    - strip leading/trailing separators
-    - limit total length to max_len
+    """Convert parameter name to filesystem-safe filename component.
+    
+    Transforms human-readable names like "PM2.5 - Local Conditions" into
+    safe filenames like "PM2-5-Local-Conditions".
+    
+    Rules:
+        - Whitespace → single dash
+        - Remove unsafe characters (keep only alphanumeric, dash, underscore, dot)
+        - Collapse repeated separators
+        - Strip leading/trailing separators
+        - Limit length to max_len characters
+    
+    Args:
+        name: Parameter name to sanitize
+        max_len: Maximum allowed filename length (default 80)
+    
+    Returns:
+        Filesystem-safe string suitable for use in filenames
     """
     if not name:
         return "unknown"
 
-    # normalize whitespace to single dash
+    # Normalize whitespace to single dash
     s = re.sub(r"\s+", "-", name)
-    # remove unsafe characters
+    # Remove unsafe characters (keep only alphanumeric, dot, dash, underscore)
     s = re.sub(r"[^A-Za-z0-9._-]", "", s)
-    # collapse multiple dashes/underscores
+    # Collapse multiple consecutive dashes/underscores
     s = re.sub(r"[-_]{2,}", "-", s)
-    # strip leading/trailing non-alnum
+    # Strip leading/trailing non-alphanumeric characters
     s = re.sub(r"(^[^A-Za-z0-9]+)|([^A-Za-z0-9]+$)", "", s)
     if not s:
         return "unknown"
@@ -120,10 +148,30 @@ def _sanitize_filename(name: str, max_len: int = 80) -> str:
 
 
 def run(workers: int = DEFAULT_WORKERS) -> None:
+    """Execute full AQS data extraction pipeline for sample, annual, and daily data.
+    
+    This is the main entry point that coordinates the entire extraction process:
+    1. Validates environment and AQS API health
+    2. Loads parameter list from ops/dimPollutant.csv
+    3. Spawns worker threads to process parameters concurrently
+    4. Extracts sample, annual, and daily data for each parameter
+    
+    Args:
+        workers: Number of concurrent worker threads (default 4)
+    
+    Environment Variables Required:
+        BDATE: Begin date (YYYY-MM-DD format)
+        EDATE: End date (YYYY-MM-DD format)
+        STATE_CODE: State FIPS code (e.g., "41" for Oregon)
+        DATAREPO_ROOT: Root directory for data lake output
+        AQS_EMAIL: EPA AQS API email credential
+        AQS_KEY: EPA AQS API key credential
+    """
     config.ensure_dirs(config.RAW_SAMPLE, config.RAW_ANNUAL, config.TRANS, config.STAGED)
     config.set_aqs_credentials()
 
-    # Short-circuit if AQS is currently marked unhealthy by the circuit-breaker
+    # Check if AQS API circuit breaker is open (too many recent failures)
+    # If open, skip extraction and write degraded status manifest
     if _client.circuit_is_open():
         from loaders.filesystem import atomic_write_json
 
@@ -137,8 +185,8 @@ def run(workers: int = DEFAULT_WORKERS) -> None:
         print("AQS circuit is open — wrote degraded manifest and exiting")
         return
 
-    # Load parameters: always use the pollutant dimension file provided by the
-    # project, which contains the approved parameter list for sample runs.
+    # Load parameter list from pollutant dimension table
+    # This CSV defines which parameters to extract and their metadata
     dfp = pd.read_csv("ops/dimPollutant.csv", dtype=str)
     if "aqs_parameter" not in dfp.columns or "analyte_name" not in dfp.columns:
         raise KeyError("ops/dimPollutant.csv must contain 'aqs_parameter' and 'analyte_name' columns")
@@ -147,8 +195,9 @@ def run(workers: int = DEFAULT_WORKERS) -> None:
     print(f"Running sample ingest for {len(params_list)} parameters with {workers} workers")
 
     results = {}
-    # Use the policy-enforced start date (clamped to >= 2005-01-01)
+    # Apply policy-enforced begin date (cannot be earlier than 2005-01-01)
     bdate = config.clamped_bdate()
+    # Process parameters concurrently using thread pool
     with ThreadPoolExecutor(max_workers=workers) as exe:
         futures = {exe.submit(_process_parameter, code, label, bdate, config.EDATE, config.STATE): (code, label) for code, label in params_list}
         for fut in as_completed(futures):
