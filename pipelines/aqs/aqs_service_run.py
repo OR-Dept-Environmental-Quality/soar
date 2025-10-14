@@ -62,9 +62,6 @@ def _process_parameter(param_code: str, param_label: str, bdate: str, edate: str
         for year_token, df in res:
             if df is None or df.empty:
                 continue
-            # Replace parameter_code with parameter_name in the 'parameter' column
-            if "parameter" in df.columns:
-                df["parameter"] = param_label
             year_csv = SAMPLE_BASE_DIR / f"aqs_sample_{group_store}_{year_token}.csv"
             append_csv(df, year_csv)
             total += len(df)
@@ -73,9 +70,6 @@ def _process_parameter(param_code: str, param_label: str, bdate: str, edate: str
         df_all = res
         if df_all is None or df_all.empty:
             return param_label, 0
-        # Replace parameter_code with parameter_name in the 'parameter' column
-        if "parameter" in df_all.columns:
-            df_all["parameter"] = param_label
         # append all rows into a legacy sample file at the root sample folder
         SAMPLE_BASE_DIR.mkdir(parents=True, exist_ok=True)
         csv_path = SAMPLE_BASE_DIR / f"aqs_sample_{group_store}.csv"
