@@ -50,11 +50,7 @@ def fetch_samples_by_state(parameter_code: str, bdate: date, edate: date, state_
         url = f"https://aqs.epa.gov/data/api/sampleData/byState?{urlencode(params)}"
         df = _client.fetch_df(session, url)
         year_token = b[:4]
-        if df is None or df.empty:
-            yield year_token, pd.DataFrame()
-        else:
-            df["parameter"] = parameter_code
-            yield year_token, df
+        yield year_token, df
 
 
 def fetch_samples_for_parameter(parameter_code: str, bdate: date, edate: date, state_fips: str) -> pd.DataFrame:
@@ -104,7 +100,6 @@ def fetch_samples_for_parameter(parameter_code: str, bdate: date, edate: date, s
     if not frames:
         return pd.DataFrame()
     out = pd.concat(frames, ignore_index=True)
-    out["parameter"] = parameter_code
     return out
 
 
