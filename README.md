@@ -54,7 +54,7 @@ soar/
 5. **Run the sample-level pipeline**
    ```powershell
    set PYTHONPATH=src
-   python pipelines/aqs/sample_run.py
+   python pipelines/aqs/aqs_service_run.py
    ```
 5. **Execute unit tests and quality checks**
    ```powershell

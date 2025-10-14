@@ -1,8 +1,7 @@
-"""Sample-level pipeline orchestration for AQS services.
+"""AQS service pipeline orchestration for sample, annual, and daily data.
 
-This runner orchestrates sample-level ingestion (calls into `extractors.sample`)
-and writes per-parameter outputs. It replaces the narrower name
-`monitors_sample_run.py` with a service-oriented name.
+This runner orchestrates all AQS data ingestion services (sample, annual, daily)
+and writes per-parameter outputs organized by group_store and year.
 """
 from __future__ import annotations
 import sys
@@ -16,10 +15,11 @@ sys.path.insert(0, str(ROOT / "src"))
 
 import config
 from aqs.extractors.site_extractors import fetch_monitors, build_aqs_requests, fetch_aqs_response
-from aqs.extractors.sample import fetch_samples_dispatch
-from aqs.extractors.data import write_annual_for_parameter
+from aqs.extractors.aqs_service import fetch_samples_dispatch
+from aqs.extractors.data import write_annual_for_parameter, write_daily_for_parameter
 from loaders.filesystem import write_csv, append_csv
 from aqs import _client
+from utils import get_parameter_group
 import pandas as pd
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -35,18 +35,21 @@ def _write_parameter_outputs(param_label: str, frame: pd.DataFrame) -> None:
 
 
 def _process_parameter(param_code: str, param_label: str, bdate: str, edate: str, state: str) -> tuple[str, int]:
-    """Stream-fetch samples for a parameter and append results to a per-parameter CSV.
+    """Stream-fetch samples for a parameter and append results to group-based CSVs.
 
         This function streams sample data for a parameter and appends results to
-        a per-parameter CSV. Behavior depends on `config.SAMPLE_MODE`:
+        per-group, per-year CSV files. File naming: aqs_sample_{group_store}_{year}.csv
+        where group_store comes from dimPollutant.csv (toxics, pm25, ozone, other, etc.)
+        
+        Behavior depends on `config.SAMPLE_MODE`:
         - by_state: `fetch_samples_dispatch` yields (year_token, DataFrame) tuples
             containing all sites for the parameter in that year; each yielded frame
-            is appended immediately to a per-year CSV.
+            is appended immediately to aqs_sample_{group}_{year}.csv.
         - by_site (legacy): `fetch_samples_dispatch` returns a single DataFrame
             containing concatenated per-site results; the full DataFrame is appended
             to the default per-parameter CSV.
     """
-    safe_label = _sanitize_filename(param_label)
+    group_store = get_parameter_group(param_code)
     total = 0
 
     # Dispatch to configured mode. For by_state mode `fetch_samples_dispatch`
@@ -54,31 +57,37 @@ def _process_parameter(param_code: str, param_label: str, bdate: str, edate: str
     # legacy per-site behavior it returns a single DataFrame object.
     res = fetch_samples_dispatch(param_code, bdate, edate, state)
     if hasattr(res, "__iter__") and not isinstance(res, pd.DataFrame):
-        # by_state generator
+        # by_state generator - write to group-based year files
         for year_token, df in res:
             if df is None or df.empty:
                 continue
             year_dir = SAMPLE_BASE_DIR / year_token
             year_dir.mkdir(parents=True, exist_ok=True)
-            year_csv = year_dir / f"aqs_sample_{safe_label}.csv"
+            year_csv = year_dir / f"aqs_sample_{group_store}_{year_token}.csv"
             append_csv(df, year_csv)
             total += len(df)
     else:
-        # legacy per-site DataFrame
+        # legacy per-site DataFrame - write to group-based file at root
         df_all = res
         if df_all is None or df_all.empty:
             return param_label, 0
         # append all rows into a legacy sample file at the root sample folder
         SAMPLE_BASE_DIR.mkdir(parents=True, exist_ok=True)
-        csv_path = SAMPLE_BASE_DIR / f"aqs_sample_{safe_label}.csv"
+        csv_path = SAMPLE_BASE_DIR / f"aqs_sample_{group_store}.csv"
         append_csv(df_all, csv_path)
         total += len(df_all)
 
     # write annual aggregates to RAW_ANNUAL (best effort, ignore errors per parameter)
     try:
-        write_annual_for_parameter(param_code, param_label, bdate, edate, state)
+        write_annual_for_parameter(param_code, param_label, bdate, edate, state, group_store=group_store)
     except Exception as exc:  # pragma: no cover - runtime safety
         print(f"Annual data fetch failed for {param_label} ({param_code}): {exc}")
+
+    # write daily summaries to RAW_DAILY (best effort, ignore errors per parameter)
+    try:
+        write_daily_for_parameter(param_code, param_label, bdate, edate, state, group_store=group_store)
+    except Exception as exc:  # pragma: no cover - runtime safety
+        print(f"Daily data fetch failed for {param_label} ({param_code}): {exc}")
 
     return param_label, total
 

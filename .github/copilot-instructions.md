@@ -18,9 +18,9 @@ Note: transformation logic is being redesigned; the previous `src/soar/aqs/trans
 - Run the metadata pipeline (from repo root):
   - `set PYTHONPATH=src; python pipelines/aqs/metadata_run.py` (PowerShell)
   - or `python -m pipelines.aqs.metadata_run` (module mode; the script inserts `src` onto sys.path)
-- Run the sample-level pipeline (from repo root):
-  - `set PYTHONPATH=src; python pipelines/aqs/sample_run.py` (PowerShell)
-  - or `python -m pipelines.aqs.sample_run` (module mode)
+- Run the AQS service pipeline (from repo root):
+  - `set PYTHONPATH=src; python pipelines/aqs/aqs_service_run.py` (PowerShell)
+  - or `python -m pipelines.aqs.aqs_service_run` (module mode)
 - Run tests and linters (after installing requirements):
   - `ruff check .`
   - `black --check .`
@@ -47,7 +47,7 @@ Note: transformation logic is being redesigned; the previous `src/soar/aqs/trans
 - Tests should construct DataFrames directly (see `tests/test_monitors.py:: _build_sample_frame`) and validate transformer output with `pandera` schemas where helpful.
 
 ## What agents must NOT assume
--- Do not assume `src` is on sys.path — pipelines either add it (see `metadata_run.py` or `sample_run.py`) or callers must set `PYTHONPATH`.
+-- Do not assume `src` is on sys.path — pipelines either add it (see `metadata_run.py` or `aqs_service_run.py`) or callers must set `PYTHONPATH`.
 - Do not assume `pyaqsapi` is installed; only import it at runtime if the change requires actual API calls.
 
 ---
