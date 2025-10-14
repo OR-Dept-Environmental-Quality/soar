@@ -57,13 +57,12 @@ def _process_parameter(param_code: str, param_label: str, bdate: str, edate: str
     # legacy per-site behavior it returns a single DataFrame object.
     res = fetch_samples_dispatch(param_code, bdate, edate, state)
     if hasattr(res, "__iter__") and not isinstance(res, pd.DataFrame):
-        # by_state generator - write to group-based year files
+        # by_state generator - write to group-based year files (no year folders)
+        SAMPLE_BASE_DIR.mkdir(parents=True, exist_ok=True)
         for year_token, df in res:
             if df is None or df.empty:
                 continue
-            year_dir = SAMPLE_BASE_DIR / year_token
-            year_dir.mkdir(parents=True, exist_ok=True)
-            year_csv = year_dir / f"aqs_sample_{group_store}_{year_token}.csv"
+            year_csv = SAMPLE_BASE_DIR / f"aqs_sample_{group_store}_{year_token}.csv"
             append_csv(df, year_csv)
             total += len(df)
     else:

@@ -150,7 +150,7 @@ def fetch_daily_by_state(parameter_code: str, bdate: date, edate: date, state_fi
 def write_annual_for_parameter(parameter_code: str, analyte_name: str, bdate: date, edate: date, state_fips: str, session=None, group_store: str = None) -> dict:
     """Write annual data for a parameter to group-based CSV files.
     
-    Files are written as: raw/aqs/annual/{year}/aqs_annual_{group_store}_{year}.csv
+    Files are written as: raw/aqs/annual/aqs_annual_{group_store}_{year}.csv
     where group_store comes from dimPollutant.csv (toxics, pm25, ozone, etc.)
     """
     session = session or _client.make_session()
@@ -165,10 +165,11 @@ def write_annual_for_parameter(parameter_code: str, analyte_name: str, bdate: da
     logs_dir.mkdir(parents=True, exist_ok=True)
 
     try:
+        # Ensure output directory exists (no year subdirectories)
+        config.RAW_ANNUAL.mkdir(parents=True, exist_ok=True)
+        
         for year_token, df in fetch_annual_by_state(parameter_code, bdate, edate, state_fips, session=session):
-            year_dir = config.RAW_ANNUAL / year_token
-            year_dir.mkdir(parents=True, exist_ok=True)
-            out_path = year_dir / f"aqs_annual_{group_store}_{year_token}.csv"
+            out_path = config.RAW_ANNUAL / f"aqs_annual_{group_store}_{year_token}.csv"
             if df is None or df.empty:
                 results["years"][year_token] = {"rows": 0, "path": str(out_path)}
                 continue
@@ -191,7 +192,7 @@ def write_annual_for_parameter(parameter_code: str, analyte_name: str, bdate: da
 def write_daily_for_parameter(parameter_code: str, analyte_name: str, bdate: date, edate: date, state_fips: str, session=None, group_store: str = None) -> dict:
     """Write daily summary data for a parameter to group-based CSV files.
     
-    Files are written as: raw/aqs/daily/{year}/aqs_daily_{group_store}_{year}.csv
+    Files are written as: raw/aqs/daily/aqs_daily_{group_store}_{year}.csv
     where group_store comes from dimPollutant.csv (toxics, pm25, ozone, etc.)
     """
     session = session or _client.make_session()
@@ -206,10 +207,11 @@ def write_daily_for_parameter(parameter_code: str, analyte_name: str, bdate: dat
     logs_dir.mkdir(parents=True, exist_ok=True)
 
     try:
+        # Ensure output directory exists (no year subdirectories)
+        config.RAW_DAILY.mkdir(parents=True, exist_ok=True)
+        
         for year_token, df in fetch_daily_by_state(parameter_code, bdate, edate, state_fips, session=session):
-            year_dir = config.RAW_DAILY / year_token
-            year_dir.mkdir(parents=True, exist_ok=True)
-            out_path = year_dir / f"aqs_daily_{group_store}_{year_token}.csv"
+            out_path = config.RAW_DAILY / f"aqs_daily_{group_store}_{year_token}.csv"
             if df is None or df.empty:
                 results["years"][year_token] = {"rows": 0, "path": str(out_path)}
                 continue
