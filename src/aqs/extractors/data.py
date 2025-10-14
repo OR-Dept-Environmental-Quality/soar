@@ -173,6 +173,9 @@ def write_annual_for_parameter(parameter_code: str, analyte_name: str, bdate: da
             if df is None or df.empty:
                 results["years"][year_token] = {"rows": 0, "path": str(out_path)}
                 continue
+            # Replace parameter_code with parameter_name in the 'parameter' column
+            if "parameter" in df.columns:
+                df["parameter"] = analyte_name
             append_csv(df, out_path)
             results["years"][year_token] = {"rows": len(df), "path": str(out_path)}
     except Exception as exc:
@@ -215,6 +218,9 @@ def write_daily_for_parameter(parameter_code: str, analyte_name: str, bdate: dat
             if df is None or df.empty:
                 results["years"][year_token] = {"rows": 0, "path": str(out_path)}
                 continue
+            # Replace parameter_code with parameter_name in the 'parameter' column
+            if "parameter" in df.columns:
+                df["parameter"] = analyte_name
             append_csv(df, out_path)
             results["years"][year_token] = {"rows": len(df), "path": str(out_path)}
     except Exception as exc:
