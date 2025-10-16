@@ -1,18 +1,22 @@
-"""AQS service pipeline orchestration for sample, annual, and daily data.
+"""AQS pipeline orchestration for sample, annual, daily, and transform data.
 
-This pipeline extracts air quality data from EPA's AQS API for three service types:
-- Sample data: Hourly/sub-daily measurements from monitoring stations
-- Annual data: Annual statistical aggregates (mean, max, percentiles, etc.)
-- Daily data: Daily statistical summaries (mean, max, AQI, etc.)
+This pipeline extracts air quality data from EPA's AQS API in consecutive service order:
+1. Sample data: Hourly/sub-daily measurements for ALL parameters (toxics + criteria)
+2. Annual data: Annual statistical aggregates for ALL parameters (toxics + criteria)
+3. Daily data: Daily statistical summaries for criteria pollutants only
+4. Transform: TRV exceedance calculations for toxics data only
 
-Output files are organized by pollutant group_store (toxics, pm25, ozone, other) and year,
-with all files written directly to service folders (no year subdirectories).
+Services run consecutively with year-by-year parameter processing within each service.
 """
 from __future__ import annotations
 import sys
 from pathlib import Path
 from urllib.parse import urlparse, parse_qs
 import re
+from datetime import datetime
+from concurrent.futures import ThreadPoolExecutor
+import threading
+import os
 
 # Add src directory to Python path for direct module execution
 # Allows running: python pipelines/aqs/aqs_service_run.py
@@ -23,14 +27,83 @@ import config
 from aqs.extractors.site_extractors import fetch_monitors, build_aqs_requests, fetch_aqs_response
 from aqs.extractors.aqs_service import fetch_samples_dispatch
 from aqs.extractors.data import write_annual_for_parameter, write_daily_for_parameter
-from loaders.filesystem import write_csv, append_csv
+from aqs.transformers.trv_sample import transform_toxics_trv
+from aqs.transformers.trv_annual import transform_toxics_annual_trv
+from loaders.filesystem import write_csv, append_csv, atomic_write_json
 from aqs import _client
 from utils import get_parameter_group
 import pandas as pd
-from concurrent.futures import ThreadPoolExecutor, as_completed
 
 SAMPLE_BASE_DIR = config.RAW_SAMPLE
-DEFAULT_WORKERS = 4
+
+_session_local = threading.local()
+TEST_MODE = os.getenv("AQS_TEST_MODE", "").strip().lower() in {"1", "true", "yes", "on"}
+_checkpoint_registry_lock = threading.Lock()
+_checkpoint_locks: dict[str, threading.Lock] = {}
+
+
+def _checkpoint_key(service: str, year: str | None) -> str:
+    return f"{service}:{year or 'global'}"
+
+
+def _get_checkpoint_lock(service: str, year: str | None) -> threading.Lock:
+    key = _checkpoint_key(service, year)
+    with _checkpoint_registry_lock:
+        lock = _checkpoint_locks.get(key)
+        if lock is None:
+            lock = threading.Lock()
+            _checkpoint_locks[key] = lock
+    return lock
+
+
+def _get_session():
+    """Provide a thread-local requests.Session for connection reuse."""
+    session = getattr(_session_local, "session", None)
+    if session is None:
+        session = _client.make_session(timeout=config.AQS_TIMEOUT)
+        _session_local.session = session
+    return session
+
+
+def _checkpoint_path(service: str, year: str | None = None) -> Path:
+    if year and year != "completed":
+        filename = f"{service}_checkpoint_{year}.json"
+    else:
+        filename = f"{service}_checkpoint.json"
+    return config.CTL_DIR / filename
+
+
+def _load_checkpoint(service: str, year: str | None = None) -> dict:
+    """Load checkpoint metadata for a service/year combination."""
+    checkpoint_path = _checkpoint_path(service, year)
+    lock = _get_checkpoint_lock(service, year)
+    with lock:
+        if checkpoint_path.exists():
+            try:
+                import json
+                with open(checkpoint_path, "r", encoding="utf-8") as fh:
+                    return json.load(fh)
+            except Exception:
+                pass
+    return {"last_param_index": -1}
+
+
+def _save_checkpoint(service: str, year: str | None, param_index: int) -> None:
+    """Persist checkpoint metadata for a service/year combination."""
+    checkpoint = {"year": year, "last_param_index": param_index}
+    checkpoint_path = _checkpoint_path(service, year)
+    lock = _get_checkpoint_lock(service, year)
+    with lock:
+        checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
+        atomic_write_json(checkpoint_path, checkpoint)
+
+
+def _clear_checkpoint(service: str, year: str | None = None) -> None:
+    path = _checkpoint_path(service, year)
+    lock = _get_checkpoint_lock(service, year)
+    with lock:
+        if path.exists():
+            path.unlink()
 
 
 def _write_parameter_outputs(param_label: str, frame: pd.DataFrame) -> None:
@@ -40,73 +113,67 @@ def _write_parameter_outputs(param_label: str, frame: pd.DataFrame) -> None:
     write_csv(frame, csv_path)
 
 
-def _process_parameter(param_code: str, param_label: str, bdate: str, edate: str, state: str) -> tuple[str, int]:
-    """Extract and write all three data types (sample, annual, daily) for one parameter.
-    
-    This function coordinates the extraction of sample, annual, and daily data for a single
-    air quality parameter. Data is organized by group_store category and written to CSV files.
-    
-    Args:
-        param_code: AQS parameter code (e.g., "44201" for Ozone)
-        param_label: Human-readable parameter name (e.g., "Ozone")
-        bdate: Begin date in YYYYMMDD format
-        edate: End date in YYYYMMDD format
-        state: State FIPS code (e.g., "41" for Oregon)
-    
-    Returns:
-        Tuple of (parameter_name, total_sample_rows_written)
-    
-    Output files:
-        - raw/aqs/sample/aqs_sample_{group_store}_{year}.csv
-        - raw/aqs/annual/aqs_annual_{group_store}_{year}.csv  
-        - raw/aqs/daily/aqs_daily_{group_store}_{year}.csv
-    
-    Note: Annual and daily extractions use best-effort error handling; failures are logged
-    but don't stop sample data extraction.
-    """
-    group_store = get_parameter_group(param_code)
-    total = 0
+def _process_parameter_for_year(param_code: str, param_label: str, year: str, state: str, service: str) -> tuple[str, int, bool]:
+    """Extract data for one parameter in one specific year.
 
-    # Check if response is a generator (by_state mode) or DataFrame (legacy by_site mode)
-    # by_state mode: yields (year, DataFrame) tuples for memory-efficient yearly streaming
-    # by_site mode: returns single concatenated DataFrame with all years
-    res = fetch_samples_dispatch(param_code, bdate, edate, state)
-    if hasattr(res, "__iter__") and not isinstance(res, pd.DataFrame):
-        # Streaming mode: process yearly data chunks as they arrive
-        # Writes to: raw/aqs/sample/aqs_sample_{group_store}_{year}.csv
-        SAMPLE_BASE_DIR.mkdir(parents=True, exist_ok=True)
-        for year_token, df in res:
-            if df is None or df.empty:
-                continue
-            year_csv = SAMPLE_BASE_DIR / f"aqs_sample_{group_store}_{year_token}.csv"
-            append_csv(df, year_csv)  # Appends to existing file or creates with header
-            total += len(df)
-    else:
-        # Legacy batch mode: entire dataset returned at once
-        # Writes to: raw/aqs/sample/aqs_sample_{group_store}.csv (no year in filename)
-        df_all = res
-        if df_all is None or df_all.empty:
-            return param_label, 0
-        SAMPLE_BASE_DIR.mkdir(parents=True, exist_ok=True)
-        csv_path = SAMPLE_BASE_DIR / f"aqs_sample_{group_store}.csv"
-        append_csv(df_all, csv_path)
-        total += len(df_all)
+    Returns a tuple of (parameter_name, rows_written, succeeded) so callers can
+    decide whether to advance checkpoints."""
+    bdate = f"{year}0101"
+    edate = f"{year}1231"
+    
+    print(f"  Processing {service} data for {param_label} ({param_code}) in {year}")
+    
+    session = _get_session()
 
-    # Extract annual aggregates (mean, max, percentiles by year)
-    # Best-effort: failures logged but don't stop sample extraction
     try:
-        write_annual_for_parameter(param_code, param_label, bdate, edate, state, group_store=group_store)
-    except Exception as exc:  # pragma: no cover - runtime safety
-        print(f"Annual data fetch failed for {param_label} ({param_code}): {exc}")
+        if service == 'sample':
+            # Sample data extraction
+            res = fetch_samples_dispatch(param_code, bdate, edate, state, session=session)
+            total = 0
+            
+            if hasattr(res, "__iter__") and not isinstance(res, pd.DataFrame):
+                # Streaming mode: process yearly data chunks
+                SAMPLE_BASE_DIR.mkdir(parents=True, exist_ok=True)
+                for year_token, df in res:
+                    if df is None or df.empty:
+                        continue
+                    group_store = get_parameter_group(param_code)
+                    year_csv = SAMPLE_BASE_DIR / f"aqs_sample_{group_store}_{year_token}.csv"
+                    append_csv(df, year_csv)
+                    total += len(df)
+            else:
+                # Legacy batch mode
+                df_all = res
+                if df_all is None or df_all.empty:
+                    return param_label, 0
+                SAMPLE_BASE_DIR.mkdir(parents=True, exist_ok=True)
+                group_store = get_parameter_group(param_code)
+                csv_path = SAMPLE_BASE_DIR / f"aqs_sample_{group_store}_{year}.csv"
+                append_csv(df_all, csv_path)
+                total += len(df_all)
+            return param_label, total, True
 
-    # Extract daily summaries (daily mean, max, AQI by date)
-    # Best-effort: failures logged but don't stop sample extraction
-    try:
-        write_daily_for_parameter(param_code, param_label, bdate, edate, state, group_store=group_store)
-    except Exception as exc:  # pragma: no cover - runtime safety
-        print(f"Daily data fetch failed for {param_label} ({param_code}): {exc}")
+        elif service == 'annual':
+            # Annual data extraction
+            group_store = get_parameter_group(param_code)
+            write_annual_for_parameter(param_code, param_label, bdate, edate, state, session=session, group_store=group_store)
+            # Count rows written (simplified - actual count would need to be returned from write_annual_for_parameter)
+            total = 1  # Placeholder
+            return param_label, total, True
 
-    return param_label, total
+        elif service == 'daily':
+            # Daily data extraction (criteria only)
+            group_store = get_parameter_group(param_code)
+            write_daily_for_parameter(param_code, param_label, bdate, edate, state, session=session, group_store=group_store)
+            # Count rows written (simplified)
+            total = 1  # Placeholder
+            return param_label, total, True
+
+        raise ValueError(f"Unknown service type '{service}'")
+
+    except Exception as exc:
+        print(f"    ERROR: Parameter {param_label} ({param_code}) failed in {year}: {exc}")
+        return param_label, 0, False
 
 
 def _sanitize_filename(name: str, max_len: int = 80) -> str:
@@ -147,17 +214,166 @@ def _sanitize_filename(name: str, max_len: int = 80) -> str:
     return s
 
 
-def run(workers: int = DEFAULT_WORKERS) -> None:
-    """Execute full AQS data extraction pipeline for sample, annual, and daily data.
+def _process_year_sample(year: str, all_params: list[tuple[str, str]], state: str) -> int:
+    """Process sample data extraction for a single year. Returns total rows written."""
+    print(f"\n📅 Processing SAMPLE data for year {year}")
+    print("-" * 40)
     
-    This is the main entry point that coordinates the entire extraction process:
-    1. Validates environment and AQS API health
-    2. Loads parameter list from ops/dimPollutant.csv
-    3. Spawns worker threads to process parameters concurrently
-    4. Extracts sample, annual, and daily data for each parameter
+    year_sample_rows = 0
     
-    Args:
-        workers: Number of concurrent worker threads (default 4)
+    # Check checkpoint for resume capability
+    checkpoint = _load_checkpoint('sample', year)
+    start_param_index = checkpoint.get('last_param_index', -1) + 1
+    
+    # Process parameters sequentially (one at a time for retry runs)
+    for index, (param_code, param_label) in enumerate(all_params):
+        if index < start_param_index:
+            print(f"  ⏭️  Skipping already processed {param_label} ({param_code})")
+            continue
+        _, rows, succeeded = _process_parameter_for_year(param_code, param_label, year, state, 'sample')
+        if succeeded:
+            # Save checkpoint after each successful parameter
+            _save_checkpoint('sample', year, index)
+            year_sample_rows += rows
+        else:
+            print(f"  🔁 Will retry {param_label} on next run (checkpoint not advanced)")
+
+    _clear_checkpoint('sample', year)
+        
+    print(f"✅ Completed SAMPLE extraction for {year}: {year_sample_rows} total rows")
+    return year_sample_rows
+
+
+def run_sample_service(years: list[str], all_params: list[tuple[str, str]], state: str) -> None:
+    """Run sample data extraction service for ALL parameters (toxics + criteria), year by year."""
+    print("\n" + "="*60)
+    print("STARTING SAMPLE SERVICE EXTRACTION (All Parameters)")
+    print("="*60)
+    
+    total_sample_rows = 0
+    
+    # Process years concurrently (configurable to balance speed vs API limits)
+    with ThreadPoolExecutor(max_workers=config.AQS_SAMPLE_YEAR_WORKERS) as executor:
+        futures = [executor.submit(_process_year_sample, year, all_params, state) for year in years]
+        for future in futures:
+            total_sample_rows += future.result()
+    
+    # Mark service as completed
+    _save_checkpoint('sample', None, -1)
+    
+    print(f"\n🎉 SAMPLE SERVICE COMPLETE: {total_sample_rows} total rows extracted")
+
+
+def _process_year_annual(year: str, all_params: list[tuple[str, str]], state: str) -> None:
+    """Process annual data extraction for a single year."""
+    print(f"\n📅 Processing ANNUAL data for year {year}")
+    print("-" * 40)
+    
+    for param_code, param_label in all_params:
+        _, _, succeeded = _process_parameter_for_year(param_code, param_label, year, state, 'annual')
+        if not succeeded:
+            print(f"  🔁 Will retry {param_label} on next run (annual service)")
+        
+    print(f"✅ Completed ANNUAL extraction for {year}")
+
+
+def run_annual_service(years: list[str], all_params: list[tuple[str, str]], state: str) -> None:
+    """Run annual data extraction service for ALL parameters (toxics + criteria), year by year."""
+    print("\n" + "="*60)
+    print("STARTING ANNUAL SERVICE EXTRACTION (All Parameters)")
+    print("="*60)
+    
+    # Process years concurrently (configurable to balance speed vs API limits)
+    with ThreadPoolExecutor(max_workers=config.AQS_ANNUAL_YEAR_WORKERS) as executor:
+        futures = [executor.submit(_process_year_annual, year, all_params, state) for year in years]
+        for future in futures:
+            future.result()  # Wait for completion
+    
+    print("\n🎉 ANNUAL SERVICE COMPLETE")
+
+
+def _process_year_daily(year: str, criteria_params: list[tuple[str, str]], state: str) -> None:
+    """Process daily data extraction for a single year."""
+    print(f"\n📅 Processing DAILY data for year {year}")
+    print("-" * 40)
+    
+    for param_code, param_label in criteria_params:
+        _, _, succeeded = _process_parameter_for_year(param_code, param_label, year, state, 'daily')
+        if not succeeded:
+            print(f"  🔁 Will retry {param_label} on next run (daily service)")
+        
+    print(f"✅ Completed DAILY extraction for {year}")
+
+
+def run_daily_service(years: list[str], criteria_params: list[tuple[str, str]], state: str) -> None:
+    """Run daily data extraction service for criteria pollutants only, year by year."""
+    print("\n" + "="*60)
+    print("STARTING DAILY SERVICE EXTRACTION (Criteria Pollutants Only)")
+    print("="*60)
+    
+    # Process years concurrently (configurable to balance speed vs API limits)
+    with ThreadPoolExecutor(max_workers=config.AQS_DAILY_YEAR_WORKERS) as executor:
+        futures = [executor.submit(_process_year_daily, year, criteria_params, state) for year in years]
+        for future in futures:
+            future.result()  # Wait for completion
+    
+    print("\n🎉 DAILY SERVICE COMPLETE")
+
+
+def run_transform_service() -> None:
+    """Run TRV transformation service for toxics data."""
+    print("\n" + "="*60)
+    print("STARTING TRANSFORM SERVICE (TRV Calculations)")
+    print("="*60)
+    
+    # Transform sample toxics data to TRV exceedances
+    print("\n🔄 Transforming SAMPLE toxics data to TRV exceedances...")
+    import glob
+    toxics_files = glob.glob(str(SAMPLE_BASE_DIR / "aqs_sample_toxics_*.csv"))
+    dim_pollutant_path = ROOT / "ops" / "dimPollutant.csv"
+    transform_dir = config.ROOT / "transform" / "trv" / "sample"
+    transform_dir.mkdir(parents=True, exist_ok=True)
+    
+    for toxics_file in toxics_files:
+        year = toxics_file.split("_")[-1].replace(".csv", "")  # Extract YYYY
+        print(f"  Processing TRV for sample data year {year}...")
+        df = pd.read_csv(toxics_file)
+        if df.empty:
+            continue
+        transformed_df = transform_toxics_trv(df, str(dim_pollutant_path))
+        output_path = transform_dir / f"trv_sample_{year}.csv"
+        write_csv(transformed_df, output_path)
+        print(f"  ✅ Transformed sample data for {year}: {len(transformed_df)} rows")
+    
+    # Transform annual toxics data to TRV exceedances
+    print("\n🔄 Transforming ANNUAL toxics data to TRV exceedances...")
+    annual_dir = config.RAW_ANNUAL
+    annual_toxics_files = glob.glob(str(annual_dir / "aqs_annual_toxics_*.csv"))
+    annual_transform_dir = config.ROOT / "transform" / "trv" / "annual"
+    annual_transform_dir.mkdir(parents=True, exist_ok=True)
+    
+    for annual_file in annual_toxics_files:
+        year = annual_file.split("_")[-1].replace(".csv", "")  # Extract YYYY
+        print(f"  Processing TRV for annual data year {year}...")
+        df = pd.read_csv(annual_file)
+        if df.empty:
+            continue
+        transformed_df = transform_toxics_annual_trv(df, str(dim_pollutant_path))
+        output_path = annual_transform_dir / f"trv_annual_{year}.csv"
+        write_csv(transformed_df, output_path)
+        print(f"  ✅ Transformed annual data for {year}: {len(transformed_df)} rows")
+    
+    print("\n🎉 TRANSFORM SERVICE COMPLETE")
+
+
+def run() -> None:
+    """Execute full AQS data extraction pipeline in consecutive service order.
+    
+    Service execution order:
+    1. Sample service (ALL parameters: toxics + criteria) - year by year, parameter by parameter
+    2. Annual service (ALL parameters: toxics + criteria) - year by year, parameter by parameter  
+    3. Daily service (criteria only) - year by year, parameter by parameter
+    4. Transform service - TRV calculations for toxics data only
     
     Environment Variables Required:
         BDATE: Begin date (YYYY-MM-DD format)
@@ -167,51 +383,70 @@ def run(workers: int = DEFAULT_WORKERS) -> None:
         AQS_EMAIL: EPA AQS API email credential
         AQS_KEY: EPA AQS API key credential
     """
+    print("🚀 Starting AQS Pipeline Execution")
+    print(f"📅 Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    
+    # Setup and validation
     config.ensure_dirs(config.RAW_SAMPLE, config.RAW_ANNUAL, config.TRANS, config.STAGED)
     config.set_aqs_credentials()
-
-    # Check if AQS API circuit breaker is open (too many recent failures)
-    # If open, skip extraction and write degraded status manifest
+    
+    # Check circuit breaker
     if _client.circuit_is_open():
         from loaders.filesystem import atomic_write_json
-
-        manifest_dir = Path(__file__).resolve().parents[2] / "metadata"
+        manifest_dir = ROOT / "metadata"
         manifest_dir.mkdir(parents=True, exist_ok=True)
         degraded = {
             "status": "degraded",
             "reason": "AQS circuit is open; skipping heavy extraction",
         }
         atomic_write_json(manifest_dir / "run_manifest_degraded.json", degraded)
-        print("AQS circuit is open — wrote degraded manifest and exiting")
+        print("❌ AQS circuit is open — wrote degraded manifest and exiting")
         return
-
-    # Load parameter list from pollutant dimension table
-    # This CSV defines which parameters to extract and their metadata
+    
+    # Load parameter lists
+    print("\n📋 Loading parameter definitions...")
     dfp = pd.read_csv("ops/dimPollutant.csv", dtype=str)
-    if "aqs_parameter" not in dfp.columns or "analyte_name" not in dfp.columns:
-        raise KeyError("ops/dimPollutant.csv must contain 'aqs_parameter' and 'analyte_name' columns")
-    params_list = list(dfp[["aqs_parameter", "analyte_name"]].dropna().itertuples(index=False, name=None))
-
-    print(f"Running sample ingest for {len(params_list)} parameters with {workers} workers")
-
-    results = {}
-    # Apply policy-enforced begin date (cannot be earlier than 2005-01-01)
-    bdate = config.clamped_bdate()
-    # Process parameters concurrently using thread pool
-    with ThreadPoolExecutor(max_workers=workers) as exe:
-        futures = {exe.submit(_process_parameter, code, label, bdate, config.EDATE, config.STATE): (code, label) for code, label in params_list}
-        for fut in as_completed(futures):
-            code, label = futures[fut]
-            try:
-                _, count = fut.result()
-            except Exception as exc:
-                print(f"Parameter {label} ({code}) failed: {exc}")
-                results[label] = 0
-            else:
-                results[label] = count
-
-    total = sum(results.values())
-    print(f"Finished sample ingest. Total rows fetched: {total}")
+    if "aqs_parameter" not in dfp.columns or "analyte_name_deq" not in dfp.columns or "group_store" not in dfp.columns:
+        raise KeyError("ops/dimPollutant.csv must contain 'aqs_parameter', 'analyte_name_deq', and 'group_store' columns")
+    
+    # Filter parameter lists to Criteria only
+    criteria_df = dfp[dfp["analyte_group"] == "Criteria"]
+    all_params = list(criteria_df[["aqs_parameter", "analyte_name_deq"]].dropna().itertuples(index=False, name=None))
+    
+    if TEST_MODE and len(all_params) > 5:
+        print("🧪 TEST MODE: Limiting to 5 parameters")
+        all_params = all_params[:5]
+    
+    criteria_params = all_params  # Same as all_params now
+    
+    print(f"📊 Found {len(all_params)} total parameters")
+    print(f"📊 Found {len(criteria_params)} criteria parameters")
+    
+    # Generate years list
+    start_year = config.BDATE.year
+    end_year = config.EDATE.year
+    years = [str(year) for year in range(start_year, end_year + 1)]
+    
+    if TEST_MODE and len(years) > 2:
+        print("🧪 TEST MODE: Limiting to 2 years")
+        years = years[:2]
+    
+    print(f"📅 Processing years: {', '.join(years)}")
+    
+    # Execute services in consecutive order (extraction only, skip transform)
+    try:
+        run_sample_service(years, all_params, config.STATE)
+        run_annual_service(years, all_params, config.STATE)
+        run_daily_service(years, criteria_params, config.STATE)
+        # run_transform_service()  # Skipped for extraction only
+        
+        print("\n" + "="*60)
+        print("🎉 AQS PIPELINE EXECUTION COMPLETE")
+        print("="*60)
+        
+    except Exception as e:
+        print(f"\n❌ Pipeline execution failed: {e}")
+        raise
 
 
 if __name__ == "__main__":

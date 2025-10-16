@@ -7,6 +7,7 @@ calendar-year chunks used by several AQS services.
 from __future__ import annotations
 
 import time
+from collections import deque
 from datetime import date, datetime, timedelta
 from threading import Lock
 from typing import Iterator, Tuple
@@ -22,12 +23,15 @@ import config
 # Simple global rate limiter state
 _last_request_time = 0.0
 _rate_lock = Lock()
-_min_delay_seconds = float(int(config.__dict__.get('AQS_MIN_DELAY', 5)))
+_request_timestamps: deque[float] = deque()
+_min_delay_seconds = float(getattr(config, "AQS_MIN_DELAY", 0.0))
+_max_requests_per_second = int(getattr(config, "AQS_MAX_RPS", 5))
 
 # Retry/backoff configuration (read from env or use defaults)
-_AQS_RETRIES = int(config.__dict__.get('AQS_RETRIES', 4))
-_BACKOFF_FACTOR = float(config.__dict__.get('AQS_BACKOFF_FACTOR', 1.0))
-_RETRY_MAX_WAIT = int(config.__dict__.get('AQS_RETRY_MAX_WAIT', 60))
+_AQS_RETRIES = int(getattr(config, "AQS_RETRIES", 6))
+_BACKOFF_FACTOR = float(getattr(config, "AQS_BACKOFF_FACTOR", 1.0))
+_RETRY_MAX_WAIT = int(getattr(config, "AQS_RETRY_MAX_WAIT", 30))
+_DEFAULT_TIMEOUT = int(getattr(config, "AQS_TIMEOUT", 30))
 
 # Circuit-breaker configuration
 _CIRCUIT_THRESHOLD = int(config.__dict__.get('AQS_CIRCUIT_THRESHOLD', 5))
@@ -35,15 +39,40 @@ _CIRCUIT_COOLDOWN = int(config.__dict__.get('AQS_CIRCUIT_COOLDOWN', 1800))  # se
 
 
 def _sleep_if_needed() -> None:
-    """Enforce a global minimum delay between requests."""
+    """Enforce request pacing to honor AQS limits while allowing concurrency."""
     global _last_request_time
+
+    if _max_requests_per_second <= 0:
+        return
+
     with _rate_lock:
-        now = time.time()
-        elapsed = now - _last_request_time
-        wait = _min_delay_seconds - elapsed
-        if wait > 0:
-            time.sleep(wait)
-        _last_request_time = time.time()
+        now = time.monotonic()
+
+        # Enforce optional minimum delay between successive requests
+        if _min_delay_seconds > 0:
+            elapsed = now - _last_request_time
+            if elapsed < _min_delay_seconds:
+                time.sleep(_min_delay_seconds - elapsed)
+                now = time.monotonic()
+
+        # Drop timestamps older than one-second window
+        window_start = now - 1.0
+        while _request_timestamps and _request_timestamps[0] < window_start:
+            _request_timestamps.popleft()
+
+        # If we're at capacity, wait until the earliest request expires
+        if len(_request_timestamps) >= _max_requests_per_second:
+            earliest = _request_timestamps[0]
+            wait = 1.0 - (now - earliest)
+            if wait > 0:
+                time.sleep(wait)
+                now = time.monotonic()
+                window_start = now - 1.0
+                while _request_timestamps and _request_timestamps[0] < window_start:
+                    _request_timestamps.popleft()
+
+        _request_timestamps.append(now)
+        _last_request_time = now
 
 
 def _health_path() -> str:
@@ -100,7 +129,7 @@ def circuit_is_open() -> bool:
     return False
 
 
-def make_session(timeout: int = 30) -> requests.Session:
+def make_session(timeout: int | None = None) -> requests.Session:
     """Create a requests.Session and wrap requests with rate limiting.
 
     We intentionally avoid the urllib3 Retry adapter here because we implement
@@ -110,7 +139,7 @@ def make_session(timeout: int = 30) -> requests.Session:
     session = requests.Session()
     session.headers.update({"User-Agent": "soar-pipeline/1.0"})
     session.request = _wrap_request_with_rate(session.request)
-    session.timeout = timeout
+    session.timeout = timeout if timeout is not None else _DEFAULT_TIMEOUT
     return session
 
 
@@ -164,7 +193,7 @@ def fetch_json(session: requests.Session, url: str) -> dict:
     last_exc = None
     for attempt in range(_AQS_RETRIES + 1):
         try:
-            resp = session.get(url, timeout=getattr(session, "timeout", 30))
+            resp = session.get(url, timeout=getattr(session, "timeout", _DEFAULT_TIMEOUT))
             # if service tells us to slow down, honor it
             if resp.status_code == 429:
                 retry_after = _parse_retry_after(resp)

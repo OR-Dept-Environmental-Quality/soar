@@ -53,6 +53,18 @@ SAMPLE_MODE = os.getenv("SAMPLE_MODE", "by_state")
 # Fallback threshold: if by_state response exceeds this row count, fall back to by_site mode
 SAMPLE_FALLBACK_ROW_THRESHOLD = int(os.getenv("SAMPLE_FALLBACK_ROW_THRESHOLD", "200000"))
 
+# HTTP and concurrency tuning for AQS clients
+AQS_TIMEOUT = int(os.getenv("AQS_TIMEOUT", "60"))
+AQS_RETRIES = int(os.getenv("AQS_RETRIES", "6"))
+AQS_BACKOFF_FACTOR = float(os.getenv("AQS_BACKOFF_FACTOR", "1.5"))
+AQS_RETRY_MAX_WAIT = int(os.getenv("AQS_RETRY_MAX_WAIT", "60"))
+AQS_MIN_DELAY = float(os.getenv("AQS_MIN_DELAY", "0"))
+AQS_MAX_RPS = int(os.getenv("AQS_MAX_RPS", "5"))
+AQS_SAMPLE_YEAR_WORKERS = max(1, int(os.getenv("AQS_SAMPLE_YEAR_WORKERS", "3")))
+AQS_SAMPLE_PARAM_WORKERS = max(1, int(os.getenv("AQS_SAMPLE_PARAM_WORKERS", "3")))
+AQS_ANNUAL_YEAR_WORKERS = max(1, int(os.getenv("AQS_ANNUAL_YEAR_WORKERS", "3")))
+AQS_DAILY_YEAR_WORKERS = max(1, int(os.getenv("AQS_DAILY_YEAR_WORKERS", "3")))
+
 
 def ensure_dirs(*paths: Path) -> None:
     """Create directory structures for data lake layers.

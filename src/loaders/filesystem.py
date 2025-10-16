@@ -51,7 +51,19 @@ def atomic_write_text(path: Path | str, text: str, encoding: str = "utf-8") -> N
     try:
         with os.fdopen(fd, "w", encoding=encoding) as fh:
             fh.write(text)
+            if destination.exists():
+                try:
+                    destination.unlink()
+                except FileNotFoundError:
+                    pass
         try:
+            os.replace(tmp_path, str(destination))
+        except PermissionError:
+            if destination.exists():
+                try:
+                    destination.unlink()
+                except FileNotFoundError:
+                    pass
             os.replace(tmp_path, str(destination))
         except Exception:
             os.rename(tmp_path, str(destination))
