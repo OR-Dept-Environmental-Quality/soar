@@ -18,12 +18,15 @@ from typing import Iterable, Optional, List
 
 import json
 from urllib.parse import urlencode
+from concurrent.futures import ThreadPoolExecutor
+import threading
 
 import pandas as pd
 import requests
 
 from pyaqsapi import bystate
 import config
+from aqs import _client
 
 
 def _ensure_dataframe(payload: object) -> Optional[pd.DataFrame]:
@@ -139,7 +142,7 @@ def fetch_samples_for_parameter(parameter_code: str, bdate: date, edate: date, s
 
     samples_frames: List[pd.DataFrame] = []
     # Expect monitors to contain state_code, county_code, site_number columns
-    unique_sites = monitors[["state_code", "county_code", "site_number"]].drop_duplicates()
+    unique_sites = monitors[["state_code", "county_code", "site_number", "parameter_code"]].drop_duplicates()
     for _, row in unique_sites.iterrows():
         state = str(row["state_code"]).zfill(2)
         county = str(row["county_code"]).zfill(3)
@@ -164,12 +167,62 @@ def fetch_samples_for_parameter(parameter_code: str, bdate: date, edate: date, s
     return pd.concat(samples_frames, ignore_index=True)
 
 
-def load_parameters_csv(path: str = "ops/parameters.csv") -> List[str]:
-    """Load the `AQS_Parameter` column from the parameters CSV as strings.
 
-    Returns a list of parameter codes suitable for looping in the pipeline.
+
+def fetch_all_monitors_for_oregon(bdate: date, edate: date) -> pd.DataFrame:
+    """Fetch all unique monitor metadata for Oregon (state 41) from 2005-2025.
+    
+    Uses hardcoded parameter codes, fetches monitors for each,
+    concatenates results, and deduplicates by site to ensure one entry per monitor
+    (~200 total unique sites), regardless of parameter coverage.
     """
-    df = pd.read_csv(path, dtype={"AQS_Parameter": str})
-    if "AQS_Parameter" not in df.columns:
-        raise KeyError("parameters.csv must contain an 'AQS_Parameter' column")
-    return df["AQS_Parameter"].dropna().astype(str).tolist()
+    # Check circuit breaker
+    if _client.circuit_is_open():
+        raise RuntimeError("AQS circuit is open; cannot fetch monitors")
+    
+    # Hardcoded parameter codes
+    parameter_codes = ["44201", "88101", "88502", "85103", "85110", "85128", "17141", "43817", "43804", "45201", "43509", "43503", "14115", "17242"]
+    
+    print(f"📋 Processing {len(parameter_codes)} parameters for monitors...")
+    
+    # Fetch monitors for each parameter concurrently (limit workers to avoid API overload)
+    all_monitors: List[pd.DataFrame] = []
+    
+    def fetch_for_param(code: str) -> pd.DataFrame:
+        print(f"  📡 Fetching monitors for parameter {code}...")
+        monitors = fetch_monitors([code], bdate, edate, "41")  # Oregon FIPS
+        if not monitors.empty:
+            print(f"  ✅ Found {len(monitors)} monitors for {code}")
+        else:
+            print(f"  ⚠️  No monitors found for {code}")
+        return monitors
+    
+    with ThreadPoolExecutor(max_workers=4) as executor:  # Limit to 4 concurrent requests
+        futures = [executor.submit(fetch_for_param, code) for code in parameter_codes]
+        for future in futures:
+            df = future.result()
+            if not df.empty:
+                all_monitors.append(df)
+    
+    # Concatenate and deduplicate by site (one entry per monitor)
+    if not all_monitors:
+        print("❌ No monitors found for any parameter")
+        return pd.DataFrame()
+    
+    print("🔄 Concatenating and deduplicating monitor data...")
+    combined = pd.concat(all_monitors, ignore_index=True)
+    original_count = len(combined)
+    
+    # Create site_code: state_code + county_code + site_number
+    combined["site_code"] = (
+        combined["state_code"].astype(str).str.zfill(2) +
+        combined["county_code"].astype(str).str.zfill(3) +
+        combined["site_number"].astype(str).str.zfill(4)
+    )
+    
+    # Deduplicate by site + parameter (state_code, county_code, site_number, parameter_code)
+    combined = combined.drop_duplicates(subset=["state_code", "county_code", "site_number", "parameter_code"])
+    deduped_count = len(combined)
+    
+    print(f"✅ Deduplicated: {original_count} raw entries → {deduped_count} unique monitor-parameter combinations")
+    return combined

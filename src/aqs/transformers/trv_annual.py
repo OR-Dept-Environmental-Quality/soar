@@ -17,17 +17,33 @@ UNIT_ALIASES: Dict[str, str] = {
     "micrograms/cubicmeter": "ug/m3",
     "microgrampercubmeter": "ug/m3",
     "microgramsperm3": "ug/m3",
-    "µg/m3": "ug/m3",
     "ug/m3": "ug/m3",
+    "µg/m3": "ug/m3",
+    "ug/m^3": "ug/m3",
+    "ug/m³": "ug/m3",
+    "µg/m³": "ug/m3",
+
     "nanograms/cubicmeter": "ng/m3",
+    "nanogramscubicmeter(25c)": "ng/m3",
+    "nanograms/cubicmeter(25c)": "ng/m3",
+    "nanogramscubicmeter(lc)": "ng/m3",
+    "nanograms/cubicmeter(lc)": "ng/m3",
     "nanogramsperm3": "ng/m3",
     "ng/m3": "ng/m3",
+
     "milligrams/cubicmeter": "mg/m3",
     "mg/m3": "mg/m3",
+
     "ppb": "ppb",
-    "ppm": "ppm",
+    "ppbv": "ppb",
     "partsperbillion": "ppb",
+    "partsperbillioncarbon": "ppb",
+    "partsperbillionvolume": "ppb",
+
+    "ppm": "ppm",
+    "ppmv": "ppm",
     "partspermillion": "ppm",
+    "partspermillionvolume": "ppm",
 }
 
 
@@ -39,20 +55,28 @@ def _normalize_unit(unit: str) -> str:
 
 
 def _convert_to_ug_m3(value: float, unit_norm: str, mol_weight: float) -> float:
-    """Convert measurement to µg/m³."""
+    """Convert measurement to µg/m³. Uses 24.45 L/mol at 25°C, 1 atm for gases."""
     if pd.isna(value):
         return math.nan
-    if unit_norm == "ug/m3" or unit_norm == "":
-        return float(value)
+    v = float(value)
+    if unit_norm in ("ug/m3", ""):
+        return v
     if unit_norm == "ng/m3":
-        return float(value) / 1000.0
+        return v / 1000.0
     if unit_norm == "mg/m3":
-        return float(value) * 1000.0
+        return v * 1000.0
     if unit_norm == "ppb":
-        # Concentration (µg/m3) = molecular weight x concentration (ppb) ÷ 24.45
-        return mol_weight * float(value) / 24.45
-    # If unknown unit, return NaN
+        # µg/m³ = ppb × MW / 24.45
+        return (v * mol_weight) / 24.45 if pd.notna(mol_weight) else math.nan
+    if unit_norm == "ppm":
+        # 1 ppm = 1000 ppb
+        return (v * 1000.0 * mol_weight) / 24.45 if pd.notna(mol_weight) else math.nan
     return math.nan
+
+def _safe_div(n, d):
+    """Divide with NaN/zero protection (vectorized for pandas Series)."""
+    import numpy as np
+    return np.where(pd.notna(n) & pd.notna(d) & (d != 0), n / d, np.nan)
 
 
 def transform_toxics_annual_trv(df: pd.DataFrame, dim_pollutant_path: str) -> pd.DataFrame:
@@ -73,51 +97,55 @@ def transform_toxics_annual_trv(df: pd.DataFrame, dim_pollutant_path: str) -> pd
     # Normalize units
     df = df.copy()
     df["parameter_code"] = df["parameter_code"].astype(str)
-    df["units_of_measurement_norm"] = df["units_of_measure"].apply(_normalize_unit)
+    df["units_of_measure_norm"] = df["units_of_measure"].apply(_normalize_unit)
 
-    # Merge mol_weight for conversions
-    df = df.merge(dim_trv[["mol_weight_g_mol"]], left_on="parameter_code", right_index=True, how="left")
+    # Merge mol_weight and TRV values
+    df = df.merge(dim_trv[["mol_weight_g_mol", "trv_cancer", "trv_noncancer", "trv_acute"]], left_on="parameter_code", right_index=True, how="left")
 
-    # Convert relevant fields to ug/m3 for calculations
+    # Convert to ug/m3 using mol_weight
     df["arithmetic_mean_ug_m3"] = df.apply(
-        lambda row: _convert_to_ug_m3(row["arithmetic_mean"], row["units_of_measurement_norm"], row["mol_weight_g_mol"]),
-        axis=1
-    )
+    lambda r: _convert_to_ug_m3(r["arithmetic_mean"], r["units_of_measure_norm"], r["mol_weight_g_mol"]), axis=1
+)
     df["first_max_value_ug_m3"] = df.apply(
-        lambda row: _convert_to_ug_m3(row["first_max_value"], row["units_of_measurement_norm"], row["mol_weight_g_mol"]),
-        axis=1
-    )
+    lambda r: _convert_to_ug_m3(r["first_max_value"], r["units_of_measure_norm"], r["mol_weight_g_mol"]), axis=1
+)
     df["second_max_value_ug_m3"] = df.apply(
-        lambda row: _convert_to_ug_m3(row["second_max_value"], row["units_of_measurement_norm"], row["mol_weight_g_mol"]),
-        axis=1
-    )
-
-    # Merge TRV values
-    df = df.merge(dim_trv[["trv_cancer", "trv_noncancer", "trv_acute"]], left_on="parameter_code", right_index=True, how="left")
+    lambda r: _convert_to_ug_m3(r["second_max_value"], r["units_of_measure_norm"], r["mol_weight_g_mol"]), axis=1
+)
 
     # Calculate exceedances
-    df["xtrv_cancer"] = df["arithmetic_mean_ug_m3"] / df["trv_cancer"]
-    df["xtrv_noncancer"] = df["arithmetic_mean_ug_m3"] / df["trv_noncancer"]
-    df["xtrv_acute_first"] = df["first_max_value_ug_m3"] / df["trv_acute"]
-    df["xtrv_acute_second"] = df["second_max_value_ug_m3"] / df["trv_acute"]
+    df["xtrv_cancer"]     = _safe_div(df["arithmetic_mean_ug_m3"], df["trv_cancer"])
+    df["xtrv_noncancer"]  = _safe_div(df["arithmetic_mean_ug_m3"], df["trv_noncancer"])
+    df["xtrv_acute_first"] = _safe_div(df["first_max_value_ug_m3"], df["trv_acute"])
+    df["xtrv_acute_second"] = _safe_div(df["second_max_value_ug_m3"], df["trv_acute"])
 
-    # Create site_code
-    df["site_code"] = df["county_code"].astype(str) + df["site_number"].astype(str)
+
+    # Create site_code: state_code (2 digits) + county_code (3 digits) + site_number (4 digits)
+    df["site_code"] = (
+        df["state_code"].astype(str).str.zfill(2) +
+        df["county_code"].astype(str).str.zfill(3) +
+        df["site_number"].astype(str).str.zfill(4)
+    )
+
+    # Add converted concentration field (equal to arithmetic mean converted value)
+    df["ugm3_converted"] = df["arithmetic_mean_ug_m3"]
 
     # Select and order output columns
     output_columns = [
-        "site_code", "parameter", "sample_duration", "parameter_code", "poc", "method", "year",
-        "units_of_measurement", "observation_count", "observation_percent", "validity_indicator",
-        "valid_day_count", "required_day_count", "exceptional_data_count", "null_observation_count",
-        "primary_exceedance_count", "secondary_exceedance_count", "certification_indicator",
-        "arithmetic_mean", "xtrv_cancer", "xtrv_noncancer", "standard_deviation",
-        "first_max_value", "xtrv_acute_first", "first_max_datetime",
-        "second_max_value", "xtrv_acute_second", "second_max_datetime",
-        "third_max_value", "third_max_datetime", "fourth_max_value", "fourth_max_datetime",
-        "first_max_nonoverlap_value", "first_max_n_o_datetime", "second_max_nonoverlap_value",
-        "second_max_n_o_datetime", "ninety_ninth_percentile", "ninety_eighth_percentile",
-        "ninety_fifth_percentile", "ninetieth_percentile", "seventy_fifth_percentile",
-        "fiftieth_percentile", "tenth_percentile"
+    "site_code", "parameter", "sample_duration", "parameter_code", "poc", "method", "year",
+    "units_of_measure",  # <- fixed
+    "observation_count", "observation_percent", "validity_indicator",
+    "valid_day_count", "required_day_count", "exceptional_data_count", "null_observation_count",
+    "primary_exceedance_count", "secondary_exceedance_count", "certification_indicator",
+    "arithmetic_mean", "arithmetic_mean_ug_m3", "ugm3_converted",  # <- added converted fields
+    "xtrv_cancer", "xtrv_noncancer", "standard_deviation",
+    "first_max_value", "first_max_value_ug_m3", "xtrv_acute_first", "first_max_datetime",
+    "second_max_value", "second_max_value_ug_m3", "xtrv_acute_second", "second_max_datetime",
+    "third_max_value", "third_max_datetime", "fourth_max_value", "fourth_max_datetime",
+    "first_max_nonoverlap_value", "first_max_n_o_datetime", "second_max_nonoverlap_value",
+    "second_max_n_o_datetime", "ninety_ninth_percentile", "ninety_eighth_percentile",
+    "ninety_fifth_percentile", "ninetieth_percentile", "seventy_fifth_percentile",
+    "fiftieth_percentile", "tenth_percentile"
     ]
 
     # Ensure all columns exist (fill missing with NaN)

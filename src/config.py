@@ -54,7 +54,7 @@ SAMPLE_MODE = os.getenv("SAMPLE_MODE", "by_state")
 SAMPLE_FALLBACK_ROW_THRESHOLD = int(os.getenv("SAMPLE_FALLBACK_ROW_THRESHOLD", "200000"))
 
 # HTTP and concurrency tuning for AQS clients
-AQS_TIMEOUT = int(os.getenv("AQS_TIMEOUT", "60"))
+AQS_TIMEOUT = int(os.getenv("AQS_TIMEOUT", "120"))
 AQS_RETRIES = int(os.getenv("AQS_RETRIES", "6"))
 AQS_BACKOFF_FACTOR = float(os.getenv("AQS_BACKOFF_FACTOR", "1.5"))
 AQS_RETRY_MAX_WAIT = int(os.getenv("AQS_RETRY_MAX_WAIT", "60"))

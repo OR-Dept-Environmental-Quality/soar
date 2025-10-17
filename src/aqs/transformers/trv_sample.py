@@ -12,22 +12,38 @@ from typing import Dict
 import pandas as pd
 
 
-# Unit normalization aliases
+# Unit normalization aliases (hardened)
 UNIT_ALIASES: Dict[str, str] = {
     "micrograms/cubicmeter": "ug/m3",
     "microgrampercubmeter": "ug/m3",
     "microgramsperm3": "ug/m3",
-    "µg/m3": "ug/m3",
     "ug/m3": "ug/m3",
+    "µg/m3": "ug/m3",
+    "ug/m^3": "ug/m3",
+    "ug/m³": "ug/m3",
+    "µg/m³": "ug/m3",
+
     "nanograms/cubicmeter": "ng/m3",
+    "nanogramscubicmeter(25c)": "ng/m3",
+    "nanograms/cubicmeter(25c)": "ng/m3",
+    "nanogramscubicmeter(lc)": "ng/m3",
+    "nanograms/cubicmeter(lc)": "ng/m3",
     "nanogramsperm3": "ng/m3",
     "ng/m3": "ng/m3",
+
     "milligrams/cubicmeter": "mg/m3",
     "mg/m3": "mg/m3",
+
     "ppb": "ppb",
-    "ppm": "ppm",
+    "ppbv": "ppb",
     "partsperbillion": "ppb",
+    "partsperbillioncarbon": "ppb",
+    "partsperbillionvolume": "ppb",
+
+    "ppm": "ppm",
+    "ppmv": "ppm",
     "partspermillion": "ppm",
+    "partspermillionvolume": "ppm",
 }
 
 
@@ -35,24 +51,37 @@ def _normalize_unit(unit: str) -> str:
     """Normalize unit string to standard form."""
     if pd.isna(unit):
         return ""
-    return UNIT_ALIASES.get(unit.lower().replace(" ", ""), "")
+    key = str(unit).lower().replace(" ", "").replace(",", "")
+    return UNIT_ALIASES.get(key, "")
 
 
 def _convert_to_ug_m3(value: float, unit_norm: str, mol_weight: float) -> float:
-    """Convert measurement to µg/m³."""
+    """Convert measurement to µg/m³. Uses 24.45 L/mol at 25°C, 1 atm for gases."""
     if pd.isna(value):
         return math.nan
-    if unit_norm == "ug/m3" or unit_norm == "":
-        return float(value)
+    v = float(value)
+
+    if unit_norm in ("ug/m3", ""):
+        return v
     if unit_norm == "ng/m3":
-        return float(value) / 1000.0
+        return v / 1000.0
     if unit_norm == "mg/m3":
-        return float(value) * 1000.0
+        return v * 1000.0
     if unit_norm == "ppb":
-        # Concentration (µg/m3) = molecular weight x concentration (ppb) ÷ 24.45
-        return mol_weight * float(value) / 24.45
-    # If unknown unit, return NaN
+        # µg/m³ = ppb × MW / 24.45
+        return (v * mol_weight) / 24.45 if pd.notna(mol_weight) else math.nan
+    if unit_norm == "ppm":
+        # 1 ppm = 1000 ppb
+        return (v * 1000.0 * mol_weight) / 24.45 if pd.notna(mol_weight) else math.nan
+
+    # Unknown unit
     return math.nan
+
+
+def _safe_div(n, d):
+    """Divide with NaN/zero protection (vectorized for pandas Series)."""
+    import numpy as np
+    return np.where(pd.notna(n) & pd.notna(d) & (d != 0), n / d, np.nan)
 
 
 def transform_toxics_trv(df: pd.DataFrame, dim_pollutant_path: str) -> pd.DataFrame:
@@ -67,36 +96,58 @@ def transform_toxics_trv(df: pd.DataFrame, dim_pollutant_path: str) -> pd.DataFr
     """
     # Load dimPollutant and filter for toxics only
     dim_pollutant = pd.read_csv(dim_pollutant_path, dtype={"aqs_parameter": str})
-    dim_trv = dim_pollutant[dim_pollutant["group_store"] == "toxics"]
-    dim_trv = dim_trv.set_index("aqs_parameter")[["mol_weight_g_mol", "trv_cancer", "trv_noncancer", "trv_acute"]]
+    dim_trv = dim_pollutant[dim_pollutant["group_store"] == "toxics"].set_index("aqs_parameter")[
+        ["mol_weight_g_mol", "trv_cancer", "trv_noncancer", "trv_acute"]
+    ]
 
     # Normalize units
     df = df.copy()
     df["parameter_code"] = df["parameter_code"].astype(str)
-    df["units_of_measurement_norm"] = df["units_of_measure"].apply(_normalize_unit)
+    df["units_of_measure_norm"] = df["units_of_measure"].apply(_normalize_unit)
 
     # Convert sample_measurement to ug/m3
-    df = df.merge(dim_trv[["mol_weight_g_mol"]], left_on="parameter_code", right_index=True, how="left")
+    df = df.merge(
+        dim_trv[["mol_weight_g_mol"]],
+        left_on="parameter_code",
+        right_index=True,
+        how="left",
+    )
     df["sample_measurement_ug_m3"] = df.apply(
-        lambda row: _convert_to_ug_m3(row["sample_measurement"], row["units_of_measurement_norm"], row["mol_weight_g_mol"]),
-        axis=1
+        lambda r: _convert_to_ug_m3(
+            r["sample_measurement"],
+            r["units_of_measure_norm"],
+            r["mol_weight_g_mol"],
+        ),
+        axis=1,
     )
 
     # Merge TRV values
-    df = df.merge(dim_trv[["trv_cancer", "trv_noncancer", "trv_acute"]], left_on="parameter_code", right_index=True, how="left")
+    df = df.merge(
+        dim_trv[["trv_cancer", "trv_noncancer", "trv_acute"]],
+        left_on="parameter_code",
+        right_index=True,
+        how="left",
+    )
 
-    # Calculate exceedances
-    df["xtrv_cancer"] = df["sample_measurement_ug_m3"] / df["trv_cancer"]
-    df["xtrv_noncancer"] = df["sample_measurement_ug_m3"] / df["trv_noncancer"]
-    df["xtrv_acute"] = df["sample_measurement_ug_m3"] / df["trv_acute"]
+    # Calculate exceedances (safe division)
+    df["xtrv_cancer"] = _safe_div(df["sample_measurement_ug_m3"], df["trv_cancer"])
+    df["xtrv_noncancer"] = _safe_div(df["sample_measurement_ug_m3"], df["trv_noncancer"])
+    df["xtrv_acute"] = _safe_div(df["sample_measurement_ug_m3"], df["trv_acute"])
 
-    # Create site_code
-    df["site_code"] = df["county_code"].astype(str) + df["site_number"].astype(str)
+    # Create site_code: state_code (2 digits) + county_code (3 digits) + site_number (4 digits)
+    df["site_code"] = (
+        df["state_code"].astype(str).str.zfill(2)
+        + df["county_code"].astype(str).str.zfill(3)
+        + df["site_number"].astype(str).str.zfill(4)
+    )
 
-    # Select and order output columns
+    # Add converted concentration field (equal to converted value)
+    df["ugm3_converted"] = df["sample_measurement_ug_m3"]
+
+    # Select and order output columns (include converted value for QA)
     output_columns = [
         "site_code", "parameter_code", "poc", "parameter", "date_local",
-        "sample_measurement", "units_of_measure", "sample_measurement_ug_m3",
+        "sample_measurement", "units_of_measurement", "sample_measurement_ug_m3", "ugm3_converted",
         "trv_cancer", "trv_noncancer", "trv_acute",
         "xtrv_cancer", "xtrv_noncancer", "xtrv_acute",
         "sample_duration", "sample_frequency", "detection_limit",
