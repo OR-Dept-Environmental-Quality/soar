@@ -37,7 +37,7 @@ UNIT_ALIASES: Dict[str, str] = {
     "ppb": "ppb",
     "ppbv": "ppb",
     "partsperbillion": "ppb",
-    "partsperbillioncarbon": "ppb",
+    "partsperbillioncarbon": "ppbc",
     "partsperbillionvolume": "ppb",
 
     "ppm": "ppm",
@@ -54,7 +54,8 @@ def _normalize_unit(unit: str) -> str:
     return UNIT_ALIASES.get(unit.lower().replace(" ", ""), "")
 
 
-def _convert_to_ug_m3(value: float, unit_norm: str, mol_weight: float) -> float:
+def _convert_to_ug_m3(value: float, unit_norm: str, mol_weight: float, carbon_atoms: float = None) -> float:
+    """Convert measurement to µg/m³. Uses 24.45 L/mol at 25°C, 1 atm for gases."""
     """Convert measurement to µg/m³. Uses 24.45 L/mol at 25°C, 1 atm for gases."""
     if pd.isna(value):
         return math.nan
@@ -68,6 +69,11 @@ def _convert_to_ug_m3(value: float, unit_norm: str, mol_weight: float) -> float:
     if unit_norm == "ppb":
         # µg/m³ = ppb × MW / 24.45
         return (v * mol_weight) / 24.45 if pd.notna(mol_weight) else math.nan
+    if unit_norm == "ppbc":
+        # µg/m³ = ppbC × (MW / carbon_atoms) × (24.45 / 1000)
+        if pd.notna(mol_weight) and pd.notna(carbon_atoms) and carbon_atoms > 0:
+            return (v * mol_weight * 24.45) / (carbon_atoms * 1000.0)
+        return math.nan
     if unit_norm == "ppm":
         # 1 ppm = 1000 ppb
         return (v * 1000.0 * mol_weight) / 24.45 if pd.notna(mol_weight) else math.nan
@@ -92,7 +98,7 @@ def transform_toxics_annual_trv(df: pd.DataFrame, dim_pollutant_path: str) -> pd
     # Load dimPollutant and filter for toxics only
     dim_pollutant = pd.read_csv(dim_pollutant_path, dtype={"aqs_parameter": str})
     dim_trv = dim_pollutant[dim_pollutant["group_store"] == "toxics"]
-    dim_trv = dim_trv.set_index("aqs_parameter")[["mol_weight_g_mol", "trv_cancer", "trv_noncancer", "trv_acute"]]
+    dim_trv = dim_trv.set_index("aqs_parameter")[["mol_weight_g_mol", "carbon_atoms", "trv_cancer", "trv_noncancer", "trv_acute"]]
 
     # Normalize units
     df = df.copy()
@@ -100,17 +106,17 @@ def transform_toxics_annual_trv(df: pd.DataFrame, dim_pollutant_path: str) -> pd
     df["units_of_measure_norm"] = df["units_of_measure"].apply(_normalize_unit)
 
     # Merge mol_weight and TRV values
-    df = df.merge(dim_trv[["mol_weight_g_mol", "trv_cancer", "trv_noncancer", "trv_acute"]], left_on="parameter_code", right_index=True, how="left")
+    df = df.merge(dim_trv[["mol_weight_g_mol", "carbon_atoms", "trv_cancer", "trv_noncancer", "trv_acute"]], left_on="parameter_code", right_index=True, how="left")
 
     # Convert to ug/m3 using mol_weight
     df["arithmetic_mean_ug_m3"] = df.apply(
-    lambda r: _convert_to_ug_m3(r["arithmetic_mean"], r["units_of_measure_norm"], r["mol_weight_g_mol"]), axis=1
+    lambda r: _convert_to_ug_m3(r["arithmetic_mean"], r["units_of_measure_norm"], r["mol_weight_g_mol"], r["carbon_atoms"]), axis=1
 )
     df["first_max_value_ug_m3"] = df.apply(
-    lambda r: _convert_to_ug_m3(r["first_max_value"], r["units_of_measure_norm"], r["mol_weight_g_mol"]), axis=1
+    lambda r: _convert_to_ug_m3(r["first_max_value"], r["units_of_measure_norm"], r["mol_weight_g_mol"], r["carbon_atoms"]), axis=1
 )
     df["second_max_value_ug_m3"] = df.apply(
-    lambda r: _convert_to_ug_m3(r["second_max_value"], r["units_of_measure_norm"], r["mol_weight_g_mol"]), axis=1
+    lambda r: _convert_to_ug_m3(r["second_max_value"], r["units_of_measure_norm"], r["mol_weight_g_mol"], r["carbon_atoms"]), axis=1
 )
 
     # Calculate exceedances
