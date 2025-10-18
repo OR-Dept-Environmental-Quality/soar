@@ -181,7 +181,12 @@ def fetch_all_monitors_for_oregon(bdate: date, edate: date) -> pd.DataFrame:
         raise RuntimeError("AQS circuit is open; cannot fetch monitors")
     
     # Hardcoded parameter codes
-    parameter_codes = ["44201", "88101", "88502", "85103", "85110", "85128", "17141", "43817", "43804", "45201", "43509", "43503", "14115", "17242"]
+    parameter_codes = ["88101", "88502", "81102", "44201", "42101", "42602",
+                       "14129", "85129", "61101", "82128", "17141", "45201",
+                       "14115", "43502"]
+
+
+
     
     print(f"📋 Processing {len(parameter_codes)} parameters for monitors...")
     

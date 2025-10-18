@@ -147,7 +147,7 @@ def transform_toxics_trv(df: pd.DataFrame, dim_pollutant_path: str) -> pd.DataFr
     # Select and order output columns (include converted value for QA)
     output_columns = [
         "site_code", "parameter_code", "poc", "parameter", "date_local",
-        "sample_measurement", "units_of_measurement", "sample_measurement_ug_m3", "ugm3_converted",
+        "sample_measurement", "units_of_measure", "sample_measurement_ug_m3",
         "trv_cancer", "trv_noncancer", "trv_acute",
         "xtrv_cancer", "xtrv_noncancer", "xtrv_acute",
         "sample_duration", "sample_frequency", "detection_limit",
