@@ -127,12 +127,28 @@ def transform_toxics_annual_trv(df: pd.DataFrame, dim_pollutant_path: str) -> pd
 
 
     # Create site_code: state_code (2 digits) + county_code (3 digits) + site_number (4 digits)
-    # Handle NaN values and non-numeric values by converting to numeric first
+    # For Oregon data, default state_code to 41 if missing/invalid
+    # Handle NaN and non-numeric values robustly
+    df["state_code_num"] = pd.to_numeric(df["state_code"], errors='coerce')
+    df["county_code_num"] = pd.to_numeric(df["county_code"], errors='coerce')
+    df["site_number_num"] = pd.to_numeric(df["site_number"], errors='coerce')
+
+    # Default to Oregon state code (41) if missing or invalid
+    df["state_code_num"] = df["state_code_num"].fillna(41).astype(int)
+    df["state_code_num"] = df["state_code_num"].where(df["state_code_num"] == 41, 41)
+
+    # Fill missing county/site codes with 0
+    df["county_code_num"] = df["county_code_num"].fillna(0).astype(int)
+    df["site_number_num"] = df["site_number_num"].fillna(0).astype(int)
+
     df["site_code"] = (
-        pd.to_numeric(df["state_code"], errors='coerce').fillna(0).astype(int).astype(str).str.zfill(2) +
-        pd.to_numeric(df["county_code"], errors='coerce').fillna(0).astype(int).astype(str).str.zfill(3) +
-        pd.to_numeric(df["site_number"], errors='coerce').fillna(0).astype(int).astype(str).str.zfill(4)
+        df["state_code_num"].astype(str).str.zfill(2) +
+        df["county_code_num"].astype(str).str.zfill(3) +
+        df["site_number_num"].astype(str).str.zfill(4)
     )
+
+    # Clean up temporary columns
+    df = df.drop(columns=["state_code_num", "county_code_num", "site_number_num"])
 
     # Add converted concentration field (equal to arithmetic mean converted value)
     df["ugm3_converted"] = df["arithmetic_mean_ug_m3"]

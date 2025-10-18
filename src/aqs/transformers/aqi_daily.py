@@ -46,13 +46,29 @@ def transform_aqi_daily(raw_daily_files: List[Path]) -> pd.DataFrame:
     if combined.empty:
         return pd.DataFrame()
 
-    # Create site_code by concatenating state_code, county_code, site_number
-    # Pad state_code to 2 digits, county_code to 3 digits, site_number to 4 digits
+    # Create site_code: state_code (2 digits) + county_code (3 digits) + site_number (4 digits)
+    # For Oregon data, default state_code to 41 if missing/invalid
+    # Handle NaN and non-numeric values robustly
+    combined["state_code_num"] = pd.to_numeric(combined["state_code"], errors='coerce')
+    combined["county_code_num"] = pd.to_numeric(combined["county_code"], errors='coerce')
+    combined["site_number_num"] = pd.to_numeric(combined["site_number"], errors='coerce')
+
+    # Default to Oregon state code (41) if missing or invalid
+    combined["state_code_num"] = combined["state_code_num"].fillna(41).astype(int)
+    combined["state_code_num"] = combined["state_code_num"].where(combined["state_code_num"] == 41, 41)
+
+    # Fill missing county/site codes with 0
+    combined["county_code_num"] = combined["county_code_num"].fillna(0).astype(int)
+    combined["site_number_num"] = combined["site_number_num"].fillna(0).astype(int)
+
     combined["site_code"] = (
-        combined["state_code"].astype(str).str.zfill(2) +
-        combined["county_code"].astype(str).str.zfill(3) +
-        combined["site_number"].astype(str).str.zfill(4)
+        combined["state_code_num"].astype(str).str.zfill(2) +
+        combined["county_code_num"].astype(str).str.zfill(3) +
+        combined["site_number_num"].astype(str).str.zfill(4)
     )
+
+    # Clean up temporary columns
+    combined = combined.drop(columns=["state_code_num", "county_code_num", "site_number_num"])
 
     # Define the fields to keep (in the order requested)
     fields_to_keep = [
