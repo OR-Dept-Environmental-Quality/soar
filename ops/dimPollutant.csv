@@ -20,12 +20,9 @@ toxics,PAHs,Naphthalene,91-20-3,128.169,,0.029,3.7,200,17141,10,I
 toxics,PAHs,Perylene,198-55-0,252.3,,,,,17212,22,III
 toxics,PAHs,Phenanthrene,85-01-8,178.23,0,,,,17150,14,II
 toxics,PAHs,Pyrene,129-00-0,202.25,0,,,,17204,16,II
-toxics,PAHs,Benzo(b)fluoranthene,205-99-2,252.3,0.8,0.0021,,,17220,16,III
 toxics,Metals,Hexavalent Chromium [Cr(VI)],18540-29-9,51.996,,0.000083,0.2,0.3,14115,,II
 toxics,Carbonyls,"2,5-Dimethylbenzaldehyde",5779-94-2,134.17,,,,,45503,8,III
-toxics,Carbonyls,2-Butanone (MEK),78-93-3,72.11000061,,,,5000,43552,4,II
 toxics,Carbonyls,Acetaldehyde,75-07-0,44.05,,0.45,140,470,43503,2,I
-toxics,Carbonyls,Acetone,67-64-1,58.07899857,,,31000,62000,43551,3,III
 toxics,Carbonyls,Benzaldehyde,100-52-7,106.12,,,,,45501,7,III
 toxics,Carbonyls,Butyraldehyde & Isobutyraldehyde,123-72-8,72.11,,,,,43329,4,III
 toxics,Carbonyls,Crotonaldehyde,123-73-9,70.09,,,,,43516,4,III
@@ -54,8 +51,6 @@ toxics,VOCs,"1,3-Butadiene",106-99-0,54.09000015,,0.033,2,660,43218,4,I
 toxics,VOCs,"1,3-Dichlorobenzene",541-73-1,147.0019989,,,,,45806,6,II
 toxics,VOCs,"1,4-Dichlorobenzene",106-46-7,147.0019989,,0.091,60,12000,45807,6,II
 toxics,VOCs,"1,4-Dimethylbenzene + 1,3-Dimethylbenzene",108-38-3,106.1699982,,,,8700,45205,12,II
-toxics,VOCs,"1,3-Dimethylbenzene",108-38-3,106.1699982,,,,8700,45205,12,II
-toxics,VOCs,"1,4-Dimethylbenzene",108-38-3,106.1699982,,,,8700,45205,12,II
 toxics,VOCs,"1,4-Dioxane",123-91-1,88.11000061,,0.2,30,7200,46201,4,III
 toxics,VOCs,2-Butanone (MEK),78-93-3,72.11000061,,,,5000,43552,4,II
 toxics,VOCs,"2-Chloro-1,3-butadiene",126-99-8,88.54000092,,0.0033,20,,43835,4,II
@@ -98,7 +93,6 @@ toxics,VOCs,Tetrachloroethylene,127-18-4,165.8300018,,3.8,41,41,43817,2,I
 toxics,VOCs,Tetrahydrofuran,109-99-9,72.11000061,,,,,46401,4,III
 toxics,VOCs,Toluene,108-88-3,92.13999939,,,5000,7500,45202,7,II
 toxics,VOCs,"trans-1,2-Dichloroethene",156-60-5,96.94300079,,,,790,43838,2,III
-toxics,VOCs,"trans-1,3-Dichloropropene",10061-02-6,110.9700012,,,,,43830,3,I
 toxics,VOCs,Trichloroethylene,79-01-6,131.3899994,,0.24,2.1,2.1,43824,2,I
 toxics,VOCs,Trichlorofluoromethane (Freon 11),75-69-4,137.3699951,,,,,43811,1,III
 toxics,VOCs,Trichlotrifluoroethane (freon 113),76-13-1,187.3800049,,,,,43821,1,III

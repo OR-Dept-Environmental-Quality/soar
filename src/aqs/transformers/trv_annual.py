@@ -127,10 +127,11 @@ def transform_toxics_annual_trv(df: pd.DataFrame, dim_pollutant_path: str) -> pd
 
 
     # Create site_code: state_code (2 digits) + county_code (3 digits) + site_number (4 digits)
+    # Handle NaN values and non-numeric values by converting to numeric first
     df["site_code"] = (
-        df["state_code"].astype(str).str.zfill(2) +
-        df["county_code"].astype(str).str.zfill(3) +
-        df["site_number"].astype(str).str.zfill(4)
+        pd.to_numeric(df["state_code"], errors='coerce').fillna(0).astype(int).astype(str).str.zfill(2) +
+        pd.to_numeric(df["county_code"], errors='coerce').fillna(0).astype(int).astype(str).str.zfill(3) +
+        pd.to_numeric(df["site_number"], errors='coerce').fillna(0).astype(int).astype(str).str.zfill(4)
     )
 
     # Add converted concentration field (equal to arithmetic mean converted value)
