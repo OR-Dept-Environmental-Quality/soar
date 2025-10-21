@@ -1,6 +1,6 @@
 """Metadata pipeline orchestration for AQS services.
 
-This runner replaces the old `monitors_run.py` naming and is intended to
+This runner replaces the old `run_monitors.py` naming and is intended to
 orchestrate metadata-level extraction (monitors and other metadata-centric
 endpoints) for AQS. It keeps the same runtime behavior and function signature
 (`run()`) so existing callers can continue to use a simple `run()` entrypoint.
@@ -10,7 +10,7 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-# When running this module directly (python -m pipelines.aqs.metadata_run)
+# When running this module directly (python -m pipelines.aqs.run_metadata)
 # the repository's `src` directory may not be on sys.path. Prepend it so
 # `import soar` works from the repo root.
 ROOT = Path(__file__).resolve().parents[2]

@@ -2,7 +2,7 @@
 
 This lightweight wrapper reads `ops/dimPollutant.csv`, filters rows with
 `group_store == 'pm25'`, and uses the existing `_process_parameter` helper
-from `aqs_service_run` to run sample, annual, and daily extraction for each
+from `run_aqs_service` to run sample, annual, and daily extraction for each
 parameter. Runs in foreground and prints progress for visibility.
 
 Usage (from repo root):
@@ -22,7 +22,7 @@ sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "src"))
 
 import config
-from pipelines.aqs import aqs_service_run as runner
+from pipelines.aqs import run_aqs_service as runner
 
 
 def main(workers: int = 4) -> None:

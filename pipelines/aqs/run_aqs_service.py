@@ -19,7 +19,7 @@ import threading
 import os
 
 # Add src directory to Python path for direct module execution
-# Allows running: python pipelines/aqs/aqs_service_run.py
+# Allows running: python pipelines/aqs/run_aqs_service.py
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
 
