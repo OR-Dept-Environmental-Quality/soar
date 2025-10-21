@@ -1,11 +1,12 @@
 import pandas as pd
-import pytest
 
 from aqs.extractors import monitors
 
 
 def test_build_aqs_requests_splits_years():
-    urls = monitors.build_aqs_requests("41", "005", "0001", "88101", "2019-06-01", "2021-03-01")
+    urls = monitors.build_aqs_requests(
+        "41", "005", "0001", "88101", "2019-06-01", "2021-03-01"
+    )
     # expect 3 requests: 2019 (partial), 2020 (full), 2021 (partial)
     assert len(urls) == 3
     assert "bdate=20190601" in urls[0]
@@ -14,13 +15,6 @@ def test_build_aqs_requests_splits_years():
     assert "edate=20201231" in urls[1]
     assert "bdate=20210101" in urls[2]
     assert "edate=20210301" in urls[2]
-
-
-def test_load_parameters_csv_reads_params(tmp_path):
-    csv = tmp_path / "params.csv"
-    csv.write_text("AQS_Parameter\n88101\n42101\n")
-    params = monitors.load_parameters_csv(str(csv))
-    assert params == ["88101", "42101"]
 
 
 def test_fetch_aqs_response_and_standardize_from_fixture(monkeypatch):

@@ -4,6 +4,7 @@ This script processes existing toxics sample and annual files in the data lake,
 applies TRV transformations, and saves to transform/aqs/trv/.
 Assumes extraction has already been completed.
 """
+
 from __future__ import annotations
 import sys
 from pathlib import Path
@@ -44,7 +45,9 @@ def main():
         transformed_df = transform_toxics_trv(df, str(dim_trv_path))
         output_path = transform_dir / f"trv_sample_{year}.csv"
         write_csv(transformed_df, output_path)
-        print(f"Transformed sample toxics for {year}: {len(transformed_df)} rows -> {output_path}")
+        print(
+            f"Transformed sample toxics for {year}: {len(transformed_df)} rows -> {output_path}"
+        )
 
     print("Starting TRV transformation for annual toxics data...")
     # Process annual toxics
@@ -59,7 +62,9 @@ def main():
         transformed_df = transform_toxics_annual_trv(df, str(dim_trv_path))
         output_path = annual_transform_dir / f"trv_annual_{year}.csv"
         write_csv(transformed_df, output_path)
-        print(f"Transformed annual toxics for {year}: {len(transformed_df)} rows -> {output_path}")
+        print(
+            f"Transformed annual toxics for {year}: {len(transformed_df)} rows -> {output_path}"
+        )
 
     print("TRV transformations completed.")
 

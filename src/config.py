@@ -4,6 +4,7 @@ Loads environment variables, defines data lake paths, and provides utilities for
 credential management and date policy enforcement. All paths point to the data lake
 (DATAREPO_ROOT), not the code repository.
 """
+
 from __future__ import annotations
 
 import os
@@ -11,6 +12,7 @@ from datetime import date
 from pathlib import Path
 
 from dotenv import load_dotenv
+
 load_dotenv()
 
 # EPA AQS API credentials
@@ -51,7 +53,9 @@ PARAMS_CSV = Path("ops/parameters.csv")
 SAMPLE_MODE = os.getenv("SAMPLE_MODE", "by_state")
 
 # Fallback threshold: if by_state response exceeds this row count, fall back to by_site mode
-SAMPLE_FALLBACK_ROW_THRESHOLD = int(os.getenv("SAMPLE_FALLBACK_ROW_THRESHOLD", "200000"))
+SAMPLE_FALLBACK_ROW_THRESHOLD = int(
+    os.getenv("SAMPLE_FALLBACK_ROW_THRESHOLD", "200000")
+)
 
 # HTTP and concurrency tuning for AQS clients
 AQS_TIMEOUT = int(os.getenv("AQS_TIMEOUT", "120"))
@@ -68,10 +72,10 @@ AQS_DAILY_YEAR_WORKERS = max(1, int(os.getenv("AQS_DAILY_YEAR_WORKERS", "3")))
 
 def ensure_dirs(*paths: Path) -> None:
     """Create directory structures for data lake layers.
-    
+
     Creates any missing directories in the provided paths. Used during pipeline
     initialization to ensure output directories exist before writing data.
-    
+
     Args:
         *paths: One or more Path objects to create
     """
@@ -81,11 +85,11 @@ def ensure_dirs(*paths: Path) -> None:
 
 def set_aqs_credentials() -> None:
     """Validate and register EPA AQS API credentials with pyaqsapi library.
-    
+
     Lazy-loads pyaqsapi dependency to avoid requiring network libraries at module
     import time. This allows tests and lightweight scripts to import config without
     pulling in requests and other heavy dependencies.
-    
+
     Raises:
         ValueError: If AQS_EMAIL or AQS_KEY environment variables are missing
         ImportError: If pyaqsapi package is not installed
@@ -101,7 +105,8 @@ def set_aqs_credentials() -> None:
         raise ImportError(
             "The 'pyaqsapi' package is required to set AQS credentials. "
             "Install it into your environment (pip install pyaqsapi) and ensure its "
-            "dependencies such as 'requests' are available.") from exc
+            "dependencies such as 'requests' are available."
+        ) from exc
 
     aqs_credentials(AQS_EMAIL, AQS_KEY)
 

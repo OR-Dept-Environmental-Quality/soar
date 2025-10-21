@@ -5,6 +5,7 @@ orchestrate metadata-level extraction (monitors and other metadata-centric
 endpoints) for AQS. It keeps the same runtime behavior and function signature
 (`run()`) so existing callers can continue to use a simple `run()` entrypoint.
 """
+
 from __future__ import annotations
 import sys
 from pathlib import Path
@@ -16,7 +17,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
 
 import config
-from aqs.extractors.site_extractors import fetch_monitors
+from aqs.extractors.monitors import fetch_monitors
 from loaders.filesystem import write_csv
 import pandas as pd
 from aqs import _client
@@ -56,16 +57,23 @@ def run() -> None:
     metadata_dir.mkdir(parents=True, exist_ok=True)
     session = _client.make_session()
     try:
-        avail = _client.fetch_json(session, "https://aqs.epa.gov/data/api/metaData/isAvailable")
+        avail = _client.fetch_json(
+            session, "https://aqs.epa.gov/data/api/metaData/isAvailable"
+        )
     except Exception as exc:
-        (metadata_dir / "aqs_availability.json").write_text(json.dumps({"error": str(exc)}))
+        (metadata_dir / "aqs_availability.json").write_text(
+            json.dumps({"error": str(exc)})
+        )
         raise
     else:
         (metadata_dir / "aqs_availability.json").write_text(json.dumps(avail))
 
     # Save fields for sampleData service
     try:
-        fields = _client.fetch_json(session, f"https://aqs.epa.gov/data/api/metaData/fieldsByService?email={config.AQS_EMAIL}&key={config.AQS_KEY}&service=sampleData")
+        fields = _client.fetch_json(
+            session,
+            f"https://aqs.epa.gov/data/api/metaData/fieldsByService?email={config.AQS_EMAIL}&key={config.AQS_KEY}&service=sampleData",
+        )
         (metadata_dir / "fields_sampleData.json").write_text(json.dumps(fields))
     except Exception:
         pass
@@ -74,40 +82,62 @@ def run() -> None:
     # (the authoritative site-parameter mapping shipped with the repo). There
     # is intentionally NO fallback to ops/dimPollutant.csv; if the metadata
     # file is missing or malformed we write a short manifest and stop.
-    params_path = Path(__file__).resolve().parents[2] / "metadata" / "aqsSiteParameters.csv"
+    params_path = (
+        Path(__file__).resolve().parents[2] / "metadata" / "aqsSiteParameters.csv"
+    )
     params: list[tuple[str, str]] = []
     if params_path.exists():
         dfp = pd.read_csv(params_path, dtype=str)
         # accept either 'analyte_name' or the legacy 'aqs_name' column
-        if "aqs_parameter" in dfp.columns and ("analyte_name" in dfp.columns or "aqs_name" in dfp.columns):
+        if "aqs_parameter" in dfp.columns and (
+            "analyte_name" in dfp.columns or "aqs_name" in dfp.columns
+        ):
             name_col = "analyte_name" if "analyte_name" in dfp.columns else "aqs_name"
-            params = list(dfp[["aqs_parameter", name_col]].dropna().itertuples(index=False, name=None))
+            params = list(
+                dfp[["aqs_parameter", name_col]]
+                .dropna()
+                .itertuples(index=False, name=None)
+            )
         else:
             # write an error manifest and stop
             from loaders.filesystem import atomic_write_json
 
             metadata_dir.mkdir(parents=True, exist_ok=True)
-            atomic_write_json(metadata_dir / "aqsSiteParameters_error.json", {
-                "error": "aqsSiteParameters.csv is missing required columns",
-                "found_columns": list(dfp.columns),
-            })
-            raise KeyError("metadata/aqsSiteParameters.csv must contain 'aqs_parameter' and 'analyte_name' columns")
+            atomic_write_json(
+                metadata_dir / "aqsSiteParameters_error.json",
+                {
+                    "error": "aqsSiteParameters.csv is missing required columns",
+                    "found_columns": list(dfp.columns),
+                },
+            )
+            raise KeyError(
+                "metadata/aqsSiteParameters.csv must contain 'aqs_parameter' and 'analyte_name' columns"
+            )
     else:
         # No fallback allowed: write a clear missing manifest and stop
         from loaders.filesystem import atomic_write_json
 
         metadata_dir.mkdir(parents=True, exist_ok=True)
-        atomic_write_json(metadata_dir / "aqsSiteParameters_missing.json", {
-            "error": "metadata/aqsSiteParameters.csv not found. No fallback allowed.",
-        })
-        raise FileNotFoundError("No parameter source found: expected metadata/aqsSiteParameters.csv (no fallback)")
+        atomic_write_json(
+            metadata_dir / "aqsSiteParameters_missing.json",
+            {
+                "error": "metadata/aqsSiteParameters.csv not found. No fallback allowed.",
+            },
+        )
+        raise FileNotFoundError(
+            "No parameter source found: expected metadata/aqsSiteParameters.csv (no fallback)"
+        )
 
-    print(f"Fetching monitors for {len(params)} parameters and writing per-parameter CSVs to {config.RAW}")
+    print(
+        f"Fetching monitors for {len(params)} parameters and writing per-parameter CSVs to {config.RAW}"
+    )
 
     total_rows = 0
     for code, label in params:
         try:
-            df = fetch_monitors([code], config.clamped_bdate(), config.EDATE, config.STATE)
+            df = fetch_monitors(
+                [code], config.clamped_bdate(), config.EDATE, config.STATE
+            )
         except Exception as exc:
             print(f"Failed to fetch monitors for {code} ({label}): {exc}")
             continue
@@ -118,6 +148,11 @@ def run() -> None:
         csv_path = config.RAW / f"monitors_{safe_label}.csv"
         write_csv(df, csv_path)
         total_rows += len(df)
+
+    # Also write a combined raw file for convenience
+    print(
+        f"Finished monitors fetch. Total monitor rows written (sum of per-parameter files): {total_rows}"
+    )
 
 
 def _sanitize_filename(name: str, max_len: int = 80) -> str:
@@ -137,9 +172,6 @@ def _sanitize_filename(name: str, max_len: int = 80) -> str:
     if len(s) > max_len:
         s = s[:max_len].rstrip("-_.")
     return s
-
-    # Also write a combined raw file for convenience
-    print(f"Finished monitors fetch. Total monitor rows written (sum of per-parameter files): {total_rows}")
 
 
 if __name__ == "__main__":

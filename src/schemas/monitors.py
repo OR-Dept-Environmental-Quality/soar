@@ -1,4 +1,5 @@
 """Pandera schemas for monitors transforms."""
+
 from __future__ import annotations
 
 import pandera as pa

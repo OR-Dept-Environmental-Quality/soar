@@ -4,12 +4,12 @@ This pipeline reads raw AQI daily summary files, combines all pollutants
 for each year, applies transformations, and writes cleaned data to the
 transform layer organized by year.
 """
+
 from __future__ import annotations
 import sys
 from pathlib import Path
 from datetime import date
 
-import pandas as pd
 
 # Add src directory to Python path
 ROOT = Path(__file__).resolve().parents[2]

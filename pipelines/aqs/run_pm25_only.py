@@ -8,10 +8,10 @@ parameter. Runs in foreground and prints progress for visibility.
 Usage (from repo root):
   $env:PYTHONPATH = 'src'; python -u pipelines/aqs/run_pm25_only.py
 """
+
 from __future__ import annotations
 import sys
 from pathlib import Path
-import time
 import pandas as pd
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -31,7 +31,11 @@ def main(workers: int = 4) -> None:
         raise KeyError("ops/dimPollutant.csv must contain 'group_store' column")
 
     pm25 = df[df["group_store"].str.lower() == "pm25"]
-    params = list(pm25[["aqs_parameter", "analyte_name"]].dropna().itertuples(index=False, name=None))
+    params = list(
+        pm25[["aqs_parameter", "analyte_name"]]
+        .dropna()
+        .itertuples(index=False, name=None)
+    )
     print(f"Processing {len(params)} pm25 parameters with {workers} workers")
 
     results = {}
@@ -40,7 +44,13 @@ def main(workers: int = 4) -> None:
     state = config.STATE
 
     with ThreadPoolExecutor(max_workers=workers) as exe:
-        futures = {exe.submit(runner._process_parameter, code, label, bdate, edate, state): (code, label) for code, label in params}
+        futures = {
+            exe.submit(runner._process_parameter, code, label, bdate, edate, state): (
+                code,
+                label,
+            )
+            for code, label in params
+        }
         for fut in as_completed(futures):
             code, label = futures[fut]
             try:

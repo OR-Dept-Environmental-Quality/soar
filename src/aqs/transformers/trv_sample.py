@@ -4,6 +4,7 @@ This module provides pure functions to transform raw toxics sample data
 into TRV exceedance calculations. All functions take DataFrames as input
 and return transformed DataFrames without side effects.
 """
+
 from __future__ import annotations
 
 import math
@@ -22,7 +23,6 @@ UNIT_ALIASES: Dict[str, str] = {
     "ug/m^3": "ug/m3",
     "ug/m³": "ug/m3",
     "µg/m³": "ug/m3",
-
     "nanograms/cubicmeter": "ng/m3",
     "nanogramscubicmeter(25c)": "ng/m3",
     "nanograms/cubicmeter(25c)": "ng/m3",
@@ -30,16 +30,13 @@ UNIT_ALIASES: Dict[str, str] = {
     "nanograms/cubicmeter(lc)": "ng/m3",
     "nanogramsperm3": "ng/m3",
     "ng/m3": "ng/m3",
-
     "milligrams/cubicmeter": "mg/m3",
     "mg/m3": "mg/m3",
-
     "ppb": "ppb",
     "ppbv": "ppb",
     "partsperbillion": "ppb",
     "partsperbillioncarbon": "ppbc",
     "partsperbillionvolume": "ppb",
-
     "ppm": "ppm",
     "ppmv": "ppm",
     "partspermillion": "ppm",
@@ -55,7 +52,9 @@ def _normalize_unit(unit: str) -> str:
     return UNIT_ALIASES.get(key, "")
 
 
-def _convert_to_ug_m3(value: float, unit_norm: str, mol_weight: float, carbon_atoms: float = None) -> float:
+def _convert_to_ug_m3(
+    value: float, unit_norm: str, mol_weight: float, carbon_atoms: float = None
+) -> float:
     """Convert measurement to µg/m³. Uses 24.45 L/mol at 25°C, 1 atm for gases."""
     """Convert measurement to µg/m³. Uses 24.45 L/mol at 25°C, 1 atm for gases."""
     if pd.isna(value):
@@ -87,6 +86,7 @@ def _convert_to_ug_m3(value: float, unit_norm: str, mol_weight: float, carbon_at
 def _safe_div(n, d):
     """Divide with NaN/zero protection (vectorized for pandas Series)."""
     import numpy as np
+
     return np.where(pd.notna(n) & pd.notna(d) & (d != 0), n / d, np.nan)
 
 
@@ -102,9 +102,9 @@ def transform_toxics_trv(df: pd.DataFrame, dim_pollutant_path: str) -> pd.DataFr
     """
     # Load dimPollutant and filter for toxics only
     dim_pollutant = pd.read_csv(dim_pollutant_path, dtype={"aqs_parameter": str})
-    dim_trv = dim_pollutant[dim_pollutant["group_store"] == "toxics"].set_index("aqs_parameter")[
-        ["mol_weight_g_mol", "carbon_atoms", "trv_cancer", "trv_noncancer", "trv_acute"]
-    ]
+    dim_trv = dim_pollutant[dim_pollutant["group_store"] == "toxics"].set_index(
+        "aqs_parameter"
+    )[["mol_weight_g_mol", "carbon_atoms", "trv_cancer", "trv_noncancer", "trv_acute"]]
 
     # Normalize units
     df = df.copy()
@@ -138,15 +138,17 @@ def transform_toxics_trv(df: pd.DataFrame, dim_pollutant_path: str) -> pd.DataFr
 
     # Calculate exceedances (safe division)
     df["xtrv_cancer"] = _safe_div(df["sample_measurement_ug_m3"], df["trv_cancer"])
-    df["xtrv_noncancer"] = _safe_div(df["sample_measurement_ug_m3"], df["trv_noncancer"])
+    df["xtrv_noncancer"] = _safe_div(
+        df["sample_measurement_ug_m3"], df["trv_noncancer"]
+    )
     df["xtrv_acute"] = _safe_div(df["sample_measurement_ug_m3"], df["trv_acute"])
 
     # Create site_code: state_code (2 digits) + county_code (3 digits) + site_number (4 digits)
     # For Oregon data, default state_code to 41 if missing/invalid
     # Handle NaN and non-numeric values robustly
-    df["state_code_num"] = pd.to_numeric(df["state_code"], errors='coerce')
-    df["county_code_num"] = pd.to_numeric(df["county_code"], errors='coerce')
-    df["site_number_num"] = pd.to_numeric(df["site_number"], errors='coerce')
+    df["state_code_num"] = pd.to_numeric(df["state_code"], errors="coerce")
+    df["county_code_num"] = pd.to_numeric(df["county_code"], errors="coerce")
+    df["site_number_num"] = pd.to_numeric(df["site_number"], errors="coerce")
 
     # Default to Oregon state code (41) if missing or invalid
     df["state_code_num"] = df["state_code_num"].fillna(41).astype(int)
@@ -157,9 +159,9 @@ def transform_toxics_trv(df: pd.DataFrame, dim_pollutant_path: str) -> pd.DataFr
     df["site_number_num"] = df["site_number_num"].fillna(0).astype(int)
 
     df["site_code"] = (
-        df["state_code_num"].astype(str).str.zfill(2) +
-        df["county_code_num"].astype(str).str.zfill(3) +
-        df["site_number_num"].astype(str).str.zfill(4)
+        df["state_code_num"].astype(str).str.zfill(2)
+        + df["county_code_num"].astype(str).str.zfill(3)
+        + df["site_number_num"].astype(str).str.zfill(4)
     )
 
     # Clean up temporary columns
@@ -170,12 +172,31 @@ def transform_toxics_trv(df: pd.DataFrame, dim_pollutant_path: str) -> pd.DataFr
 
     # Select and order output columns (include converted value for QA)
     output_columns = [
-        "site_code", "parameter_code", "poc", "parameter", "date_local",
-        "sample_measurement", "units_of_measure", "sample_measurement_ug_m3",
-        "trv_cancer", "trv_noncancer", "trv_acute",
-        "xtrv_cancer", "xtrv_noncancer", "xtrv_acute",
-        "sample_duration", "sample_frequency", "detection_limit",
-        "uncertainty", "qualifier", "method_type", "method", "method_code"
+        "site_code",
+        "latitude",
+        "longitude",
+        "county",
+        "parameter_code",
+        "poc",
+        "parameter",
+        "date_local",
+        "sample_measurement",
+        "units_of_measure",
+        "sample_measurement_ug_m3",
+        "trv_cancer",
+        "trv_noncancer",
+        "trv_acute",
+        "xtrv_cancer",
+        "xtrv_noncancer",
+        "xtrv_acute",
+        "sample_duration",
+        "sample_frequency",
+        "detection_limit",
+        "uncertainty",
+        "qualifier",
+        "method_type",
+        "method",
+        "method_code",
     ]
 
     # Ensure all columns exist (fill missing with NaN)

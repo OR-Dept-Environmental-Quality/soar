@@ -16,10 +16,8 @@ from __future__ import annotations
 from datetime import date
 from typing import Iterable, Optional, List
 
-import json
 from urllib.parse import urlencode
 from concurrent.futures import ThreadPoolExecutor
-import threading
 
 import pandas as pd
 import requests
@@ -38,7 +36,11 @@ def _ensure_dataframe(payload: object) -> Optional[pd.DataFrame]:
     if hasattr(payload, "get_data"):
         return _ensure_dataframe(payload.get_data())
     if isinstance(payload, list):
-        frames = [frame for frame in (_ensure_dataframe(item) for item in payload) if frame is not None and not frame.empty]
+        frames = [
+            frame
+            for frame in (_ensure_dataframe(item) for item in payload)
+            if frame is not None and not frame.empty
+        ]
         if not frames:
             return None
         return pd.concat(frames, ignore_index=True)
@@ -49,7 +51,9 @@ def _ensure_dataframe(payload: object) -> Optional[pd.DataFrame]:
     return frame if not frame.empty else None
 
 
-def fetch_monitors(parameter_codes: Iterable[str], bdate: date, edate: date, state_fips: str) -> pd.DataFrame:
+def fetch_monitors(
+    parameter_codes: Iterable[str], bdate: date, edate: date, state_fips: str
+) -> pd.DataFrame:
     """Fetch monitor metadata for the provided parameters and time window.
 
     This is the existing metadata fetcher (keeps using `pyaqsapi.bystate.monitors`).
@@ -85,7 +89,14 @@ def fetch_aqs_response(api_url: str) -> pd.DataFrame:
     return pd.DataFrame(data)
 
 
-def build_aqs_requests(state_code: str, county_code: str, site_number: str, parameter_code: str, start_date: date | str, end_date: date | str) -> List[str]:
+def build_aqs_requests(
+    state_code: str,
+    county_code: str,
+    site_number: str,
+    parameter_code: str,
+    start_date: date | str,
+    end_date: date | str,
+) -> List[str]:
     """Return a list of AQS sampleData/bySite request URLs split by calendar year.
 
     start_date and end_date may be datetime.date or ISO strings. Returned
@@ -123,7 +134,9 @@ def build_aqs_requests(state_code: str, county_code: str, site_number: str, para
     return urls
 
 
-def fetch_samples_for_parameter(parameter_code: str, bdate: date, edate: date, state_fips: str) -> pd.DataFrame:
+def fetch_samples_for_parameter(
+    parameter_code: str, bdate: date, edate: date, state_fips: str
+) -> pd.DataFrame:
     """Fetch sample-level data for all sites that report the given parameter.
 
     Flow:
@@ -142,7 +155,9 @@ def fetch_samples_for_parameter(parameter_code: str, bdate: date, edate: date, s
 
     samples_frames: List[pd.DataFrame] = []
     # Expect monitors to contain state_code, county_code, site_number columns
-    unique_sites = monitors[["state_code", "county_code", "site_number", "parameter_code"]].drop_duplicates()
+    unique_sites = monitors[
+        ["state_code", "county_code", "site_number", "parameter_code"]
+    ].drop_duplicates()
     for _, row in unique_sites.iterrows():
         state = str(row["state_code"]).zfill(2)
         county = str(row["county_code"]).zfill(3)
@@ -167,13 +182,12 @@ def fetch_samples_for_parameter(parameter_code: str, bdate: date, edate: date, s
     return pd.concat(samples_frames, ignore_index=True)
 
 
-
-
 def fetch_all_monitors_for_oregon(bdate: date, edate: date) -> pd.DataFrame:
     """Fetch all unique monitor metadata for Oregon (state 41) from 2005-2025.
     
-    Uses hardcoded parameter codes, fetches monitors for each,
-    concatenates results, and deduplicates by site to ensure one entry per monitor
+    Iterates through each calendar year to ensure complete dataset extraction,
+    fetches monitors for each parameter per year, concatenates results, and 
+    deduplicates by site_code to ensure one entry per monitor-parameter combination
     (~200 total unique sites), regardless of parameter coverage.
     """
     # Check circuit breaker
@@ -181,70 +195,99 @@ def fetch_all_monitors_for_oregon(bdate: date, edate: date) -> pd.DataFrame:
         raise RuntimeError("AQS circuit is open; cannot fetch monitors")
     
     # Hardcoded parameter codes
-    parameter_codes = ["88101", "88502", "81102", "44201", "42101", "42602",
-                       "14129", "85129", "61101", "82128", "17141", "45201",
-                       "14115", "43502"]
+    parameter_codes = [
+        "88101",
+        "88502", 
+        "81102",
+        "44201",
+        "42101",
+        "42602",
+        "14129",
+        "85129",
+        "61101",
+        "82128",
+        "17141",
+        "45201",
+        "14115",
+        "43502",
+        "58103",
+        "85102",
+    ]
 
+    # Generate list of years to process
+    years = list(range(bdate.year, edate.year + 1))
+    print(f"📋 Processing {len(parameter_codes)} parameters for monitors across {len(years)} years ({years[0]}-{years[-1]})...")
 
-
-    
-    print(f"📋 Processing {len(parameter_codes)} parameters for monitors...")
-    
-    # Fetch monitors for each parameter concurrently (limit workers to avoid API overload)
+    # Fetch monitors for each parameter and year combination
     all_monitors: List[pd.DataFrame] = []
     
-    def fetch_for_param(code: str) -> pd.DataFrame:
-        print(f"  📡 Fetching monitors for parameter {code}...")
-        monitors = fetch_monitors([code], bdate, edate, "41")  # Oregon FIPS
+    def fetch_for_param_year(param_year_tuple: tuple[str, int]) -> pd.DataFrame:
+        code, year = param_year_tuple
+        year_start = date(year, 1, 1)
+        year_end = date(year, 12, 31)
+        
+        print(f"  📡 Fetching monitors for parameter {code} in {year}...")
+        monitors = fetch_monitors([code], year_start, year_end, "41")  # Oregon FIPS
         if not monitors.empty:
-            print(f"  ✅ Found {len(monitors)} monitors for {code}")
+            print(f"  ✅ Found {len(monitors)} monitors for {code} in {year}")
         else:
-            print(f"  ⚠️  No monitors found for {code}")
+            print(f"  ⚠️  No monitors found for {code} in {year}")
         return monitors
+
+    # Create all parameter-year combinations
+    param_year_combinations = [(code, year) for code in parameter_codes for year in years]
     
     with ThreadPoolExecutor(max_workers=4) as executor:  # Limit to 4 concurrent requests
-        futures = [executor.submit(fetch_for_param, code) for code in parameter_codes]
+        futures = [executor.submit(fetch_for_param_year, combo) for combo in param_year_combinations]
         for future in futures:
             df = future.result()
             if not df.empty:
                 all_monitors.append(df)
     
-    # Concatenate and deduplicate by site (one entry per monitor)
+    # Concatenate and deduplicate by site_code + parameter_code (one entry per monitor-parameter combination)
     if not all_monitors:
-        print("❌ No monitors found for any parameter")
+        print("❌ No monitors found for any parameter-year combination")
         return pd.DataFrame()
     
     print("🔄 Concatenating and deduplicating monitor data...")
     combined = pd.concat(all_monitors, ignore_index=True)
-    original_count = len(combined)
-    
-    # Create site_code: state_code (2 digits) + county_code (3 digits) + site_number (4 digits)
+    original_count = len(combined)    # Create site_code: state_code (2 digits) + county_code (3 digits) + site_number (4 digits)
     # For Oregon data, default state_code to 41 if missing/invalid
     # Handle NaN and non-numeric values robustly
-    combined["state_code_num"] = pd.to_numeric(combined["state_code"], errors='coerce')
-    combined["county_code_num"] = pd.to_numeric(combined["county_code"], errors='coerce')
-    combined["site_number_num"] = pd.to_numeric(combined["site_number"], errors='coerce')
+    combined["state_code_num"] = pd.to_numeric(combined["state_code"], errors="coerce")
+    combined["county_code_num"] = pd.to_numeric(
+        combined["county_code"], errors="coerce"
+    )
+    combined["site_number_num"] = pd.to_numeric(
+        combined["site_number"], errors="coerce"
+    )
 
     # Default to Oregon state code (41) if missing or invalid
     combined["state_code_num"] = combined["state_code_num"].fillna(41).astype(int)
-    combined["state_code_num"] = combined["state_code_num"].where(combined["state_code_num"] == 41, 41)
+    combined["state_code_num"] = combined["state_code_num"].where(
+        combined["state_code_num"] == 41, 41
+    )
 
     # Fill missing county/site codes with 0
     combined["county_code_num"] = combined["county_code_num"].fillna(0).astype(int)
     combined["site_number_num"] = combined["site_number_num"].fillna(0).astype(int)
 
     combined["site_code"] = (
-        combined["state_code_num"].astype(str).str.zfill(2) +
-        combined["county_code_num"].astype(str).str.zfill(3) +
-        combined["site_number_num"].astype(str).str.zfill(4)
+        combined["state_code_num"].astype(str).str.zfill(2)
+        + combined["county_code_num"].astype(str).str.zfill(3)
+        + combined["site_number_num"].astype(str).str.zfill(4)
     )
 
     # Clean up temporary columns
-    combined = combined.drop(columns=["state_code_num", "county_code_num", "site_number_num"])
-    
-    # Deduplicate by site + parameter (state_code, county_code, site_number, parameter_code)
-    combined = combined.drop_duplicates(subset=["state_code", "county_code", "site_number", "parameter_code"])
+    combined = combined.drop(
+        columns=["state_code_num", "county_code_num", "site_number_num"]
+    )
+
+    # Deduplicate by concatenated site_code + parameter_code
+    combined = combined.drop_duplicates(subset=["site_code", "parameter_code"])
     deduped_count = len(combined)
-    
-    print(f"✅ Deduplicated: {original_count} raw entries → {deduped_count} unique monitor-parameter combinations")
+
+    print(
+        f"✅ Deduplicated: {original_count} raw entries → {deduped_count} unique monitor-parameter combinations (by site_code + parameter_code)"
+    )
     return combined

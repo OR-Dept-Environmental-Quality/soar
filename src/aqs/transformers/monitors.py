@@ -3,6 +3,7 @@
 This module provides functions to transform raw monitor metadata
 into cleaned, deduplicated monitor records with standardized fields.
 """
+
 from __future__ import annotations
 
 import pandas as pd
@@ -60,13 +61,17 @@ def transform_monitors(raw_monitors: pd.DataFrame) -> pd.DataFrame:
         "csa_name",
         "tribal_code",
         "tribe_name",
-        "site_code"
+        "site_code",
     ]
 
     # Filter to only the fields that exist in the data
-    available_fields = [field for field in fields_to_keep if field in raw_monitors.columns]
+    available_fields = [
+        field for field in fields_to_keep if field in raw_monitors.columns
+    ]
     if not available_fields:
-        raise ValueError("None of the requested fields are present in the raw monitors data")
+        raise ValueError(
+            "None of the requested fields are present in the raw monitors data"
+        )
 
     # Select the available fields
     transformed = raw_monitors[available_fields].copy()
@@ -76,7 +81,9 @@ def transform_monitors(raw_monitors: pd.DataFrame) -> pd.DataFrame:
         original_count = len(transformed)
         transformed = transformed.drop_duplicates(subset=["site_code"])
         deduped_count = len(transformed)
-        print(f"✅ Deduplicated monitors: {original_count} → {deduped_count} unique sites")
+        print(
+            f"✅ Deduplicated monitors: {original_count} → {deduped_count} unique sites"
+        )
     else:
         print("⚠️  site_code field not found, skipping deduplication")
 

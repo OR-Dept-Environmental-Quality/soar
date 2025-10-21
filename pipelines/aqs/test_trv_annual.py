@@ -3,6 +3,7 @@
 Loads dimTRV, creates a sample annual toxics DataFrame, applies the transformer,
 and prints the result to verify correctness.
 """
+
 from __future__ import annotations
 import sys
 from pathlib import Path
@@ -12,12 +13,12 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
 
 import pandas as pd
-from soar.aqs.transformers.annual_toxics import transform_toxics_annual_trv
+from aqs.transformers.trv_annual import transform_toxics_annual_trv
 
 
 def main():
-    # Path to dimTRV
-    dim_trv_path = ROOT / "ops" / "dimTRV.csv"
+    # Path to dimPollutant
+    dim_pollutant_path = ROOT / "ops" / "dimPollutant.csv"
 
     # Create sample annual toxics DataFrame (mock data)
     sample_data = {
@@ -27,9 +28,13 @@ def main():
         "poc": [1, 1],
         "method": ["MODIFIED TIM", "MODIFIED TIM"],
         "year": [2020, 2020],
-        "units_of_measurement": ["Micrograms/cubic meter (LC)", "Micrograms/cubic meter (LC)"],
+        "units_of_measure": [
+            "Micrograms/cubic meter (LC)",
+            "Micrograms/cubic meter (LC)",
+        ],
         "county_code": ["041", "041"],
         "site_number": ["0001", "0001"],
+        "state_code": ["41", "41"],
         "observation_count": [365, 365],
         "observation_percent": [100.0, 100.0],
         "validity_indicator": ["Y", "Y"],
@@ -68,25 +73,56 @@ def main():
     print(df.head())
 
     # Apply transformer
-    transformed = transform_toxics_annual_trv(df, str(dim_trv_path))
+    transformed = transform_toxics_annual_trv(df, str(dim_pollutant_path))
 
     print("\nTransformed data:")
     print(transformed.head())
 
     # Check if output columns are present
     expected_columns = [
-        "site_code", "parameter", "sample_duration", "parameter_code", "poc", "method", "year",
-        "units_of_measurement", "observation_count", "observation_percent", "validity_indicator",
-        "valid_day_count", "required_day_count", "exceptional_data_count", "null_observation_count",
-        "primary_exceedance_count", "secondary_exceedance_count", "certification_indicator",
-        "arithmetic_mean", "xtrv_cancer", "xtrv_noncancer", "standard_deviation",
-        "first_max_value", "xtrv_acute_first", "first_max_datetime",
-        "second_max_value", "xtrv_acute_second", "second_max_datetime",
-        "third_max_value", "third_max_datetime", "fourth_max_value", "fourth_max_datetime",
-        "first_max_nonoverlap_value", "first_max_n_o_datetime", "second_max_nonoverlap_value",
-        "second_max_n_o_datetime", "ninety_ninth_percentile", "ninety_eighth_percentile",
-        "ninety_fifth_percentile", "ninetieth_percentile", "seventy_fifth_percentile",
-        "fiftieth_percentile", "tenth_percentile"
+        "site_code",
+        "parameter",
+        "sample_duration",
+        "parameter_code",
+        "poc",
+        "method",
+        "year",
+        "units_of_measure",
+        "observation_count",
+        "observation_percent",
+        "validity_indicator",
+        "valid_day_count",
+        "required_day_count",
+        "exceptional_data_count",
+        "null_observation_count",
+        "primary_exceedance_count",
+        "secondary_exceedance_count",
+        "certification_indicator",
+        "arithmetic_mean",
+        "xtrv_cancer",
+        "xtrv_noncancer",
+        "standard_deviation",
+        "first_max_value",
+        "xtrv_acute_first",
+        "first_max_datetime",
+        "second_max_value",
+        "xtrv_acute_second",
+        "second_max_datetime",
+        "third_max_value",
+        "third_max_datetime",
+        "fourth_max_value",
+        "fourth_max_datetime",
+        "first_max_nonoverlap_value",
+        "first_max_n_o_datetime",
+        "second_max_nonoverlap_value",
+        "second_max_n_o_datetime",
+        "ninety_ninth_percentile",
+        "ninety_eighth_percentile",
+        "ninety_fifth_percentile",
+        "ninetieth_percentile",
+        "seventy_fifth_percentile",
+        "fiftieth_percentile",
+        "tenth_percentile",
     ]
     missing = [col for col in expected_columns if col not in transformed.columns]
     if missing:

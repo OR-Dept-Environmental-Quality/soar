@@ -1,7 +1,5 @@
-import types
-import json
 import pytest
-from datetime import datetime, timedelta
+from datetime import datetime
 
 import requests
 
@@ -34,7 +32,9 @@ class DummySession:
 
 def test_circuit_opens_after_consecutive_server_errors(tmp_path, monkeypatch):
     # ensure a clean health file location
-    monkeypatch.setattr(_client, "_health_path", lambda: str(tmp_path / "aqs_health.json"))
+    monkeypatch.setattr(
+        _client, "_health_path", lambda: str(tmp_path / "aqs_health.json")
+    )
 
     # responses: 500, 500, 500, 500, 500 (threshold default 5)
     responses = [DummyResp(500) for _ in range(6)]
@@ -53,7 +53,9 @@ def test_circuit_opens_after_consecutive_server_errors(tmp_path, monkeypatch):
 
 
 def test_reset_circuit_allows_requests(tmp_path, monkeypatch):
-    monkeypatch.setattr(_client, "_health_path", lambda: str(tmp_path / "aqs_health.json"))
+    monkeypatch.setattr(
+        _client, "_health_path", lambda: str(tmp_path / "aqs_health.json")
+    )
     # write a health file with high consecutive_failures and recent opened_at
     now = datetime.utcnow().isoformat()
     _client._write_health({"consecutive_failures": 10, "opened_at": now})

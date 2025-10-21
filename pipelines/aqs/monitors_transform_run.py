@@ -4,6 +4,7 @@ This pipeline reads raw monitor metadata, selects specific fields,
 removes duplicates by site_code, and writes cleaned monitor records
 to the transform layer.
 """
+
 from __future__ import annotations
 import sys
 from pathlib import Path
@@ -29,7 +30,9 @@ def run():
     config.ensure_dirs()
 
     # Input path (raw monitors)
-    input_path = config.ROOT / "raw" / "aqs" / "monitors" / "oregon_monitors_2005_2025.csv"
+    input_path = (
+        config.ROOT / "raw" / "aqs" / "monitors" / "oregon_monitors_2005_2025.csv"
+    )
 
     if not input_path.exists():
         print(f"❌ Raw monitors file not found: {input_path}")
@@ -60,7 +63,9 @@ def run():
     output_path = output_dir / "aqs_monitors.csv"
 
     write_csv(transformed_df, output_path)
-    print(f"\n✅ Wrote {len(transformed_df)} transformed monitor records to {output_path}")
+    print(
+        f"\n✅ Wrote {len(transformed_df)} transformed monitor records to {output_path}"
+    )
 
     print("\n🎉 Monitors transformation complete!")
 

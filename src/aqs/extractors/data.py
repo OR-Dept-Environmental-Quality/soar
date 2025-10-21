@@ -8,12 +8,10 @@ This module provides functions to fetch air quality data from EPA's AQS API:
 All fetch functions preserve API response data exactly as returned - no fields are
 added, modified, or removed. Write functions organize outputs by group_store and year.
 """
+
 from __future__ import annotations
 
 from datetime import date
-from typing import Optional
-import json
-import os
 
 import pandas as pd
 
@@ -41,24 +39,26 @@ def _sanitize_filename(name: str, max_len: int = 80) -> str:
     return s
 
 
-def fetch_samples_by_state(parameter_code: str, bdate: date, edate: date, state_fips: str, session=None):
+def fetch_samples_by_state(
+    parameter_code: str, bdate: date, edate: date, state_fips: str, session=None
+):
     """Fetch sample data from AQS sampleData/byState endpoint, yielding results per year.
-    
+
     Retrieves raw hourly/sub-daily air quality measurements for a single parameter
     across all monitoring sites in a state. Data is fetched year-by-year and yielded
     as (year, DataFrame) tuples for memory-efficient streaming processing.
-    
+
     Args:
         parameter_code: AQS parameter code (e.g., "44201" for Ozone)
         bdate: Begin date (YYYY-MM-DD or datetime.date)
         edate: End date (YYYY-MM-DD or datetime.date)
         state_fips: State FIPS code as 2-digit string (e.g., "41" for Oregon)
         session: Optional requests.Session for connection pooling
-    
+
     Yields:
         Tuple of (year_string, DataFrame) for each year in the date range.
         DataFrame contains all columns returned by AQS API without modification.
-    
+
     API Endpoint:
         https://aqs.epa.gov/data/api/sampleData/byState
     """
@@ -78,7 +78,9 @@ def fetch_samples_by_state(parameter_code: str, bdate: date, edate: date, state_
         yield year_token, df
 
 
-def fetch_samples_for_parameter(parameter_code: str, bdate: date, edate: date, state_fips: str, session=None) -> pd.DataFrame:
+def fetch_samples_for_parameter(
+    parameter_code: str, bdate: date, edate: date, state_fips: str, session=None
+) -> pd.DataFrame:
     """Backward-compatible helper: fetch sample data for a parameter and return a single concatenated DataFrame.
 
     Historically callers requested a single DataFrame for a parameter (per-site). The consolidated
@@ -90,7 +92,9 @@ def fetch_samples_for_parameter(parameter_code: str, bdate: date, edate: date, s
     """
     frames = []
     session = session or _client.make_session()
-    for _year, df in fetch_samples_by_state(parameter_code, bdate, edate, state_fips, session=session):
+    for _year, df in fetch_samples_by_state(
+        parameter_code, bdate, edate, state_fips, session=session
+    ):
         if df is None:
             continue
         if not df.empty:
@@ -102,24 +106,25 @@ def fetch_samples_for_parameter(parameter_code: str, bdate: date, edate: date, s
     return pd.concat(frames, ignore_index=True)
 
 
-
-def fetch_annual_by_state(parameter_code: str, bdate: date, edate: date, state_fips: str, session=None):
+def fetch_annual_by_state(
+    parameter_code: str, bdate: date, edate: date, state_fips: str, session=None
+):
     """Fetch annual aggregate data from AQS annualData/byState endpoint, yielding results per year.
-    
+
     Retrieves annual statistical summaries (mean, max, percentiles, etc.) for a parameter
     across all monitoring sites in a state. Data is fetched year-by-year.
-    
+
     Args:
         parameter_code: AQS parameter code (e.g., "44201" for Ozone)
         bdate: Begin date
         edate: End date
         state_fips: State FIPS code as 2-digit string
         session: Optional requests.Session for connection pooling
-    
+
     Yields:
         Tuple of (year_string, DataFrame) for each year.
         DataFrame preserves all columns from AQS API response.
-    
+
     API Endpoint:
         https://aqs.epa.gov/data/api/annualData/byState
     """
@@ -139,23 +144,25 @@ def fetch_annual_by_state(parameter_code: str, bdate: date, edate: date, state_f
         yield year_token, df
 
 
-def fetch_daily_by_state(parameter_code: str, bdate: date, edate: date, state_fips: str, session=None):
+def fetch_daily_by_state(
+    parameter_code: str, bdate: date, edate: date, state_fips: str, session=None
+):
     """Fetch daily summary data from AQS dailyData/byState endpoint, yielding results per year.
-    
+
     Retrieves daily statistical summaries (daily mean, max, AQI values, etc.) for a parameter
     across all monitoring sites in a state. Data is fetched year-by-year.
-    
+
     Args:
         parameter_code: AQS parameter code (e.g., "44201" for Ozone)
         bdate: Begin date
         edate: End date
         state_fips: State FIPS code as 2-digit string
         session: Optional requests.Session for connection pooling
-    
+
     Yields:
         Tuple of (year_string, DataFrame) for each year.
         DataFrame preserves all columns from AQS API response.
-    
+
     API Endpoint:
         https://aqs.epa.gov/data/api/dailyData/byState
     """
@@ -175,13 +182,21 @@ def fetch_daily_by_state(parameter_code: str, bdate: date, edate: date, state_fi
         yield year_token, df
 
 
-def write_annual_for_parameter(parameter_code: str, analyte_name: str, bdate: date, edate: date, state_fips: str, session=None, group_store: str = None) -> dict:
+def write_annual_for_parameter(
+    parameter_code: str,
+    analyte_name: str,
+    bdate: date,
+    edate: date,
+    state_fips: str,
+    session=None,
+    group_store: str = None,
+) -> dict:
     """Fetch and write annual aggregate data for a parameter, organized by group_store and year.
-    
+
     Extracts annual statistical data from AQS API and writes to CSV files organized by
     pollutant group (toxics, pm25, ozone, other) and year. API data is preserved exactly
     as returned without modification.
-    
+
     Args:
         parameter_code: AQS parameter code (e.g., "44201")
         analyte_name: Human-readable parameter name (e.g., "Ozone")
@@ -190,32 +205,41 @@ def write_annual_for_parameter(parameter_code: str, analyte_name: str, bdate: da
         state_fips: State FIPS code
         session: Optional requests.Session for connection pooling
         group_store: Pollutant group category (auto-detected if not provided)
-    
+
     Returns:
         Dictionary with extraction results including row counts per year and status.
         Written to logs/annual_{parameter_code}_{group_store}_{timestamp}.json
-    
+
     Output Files:
         raw/aqs/annual/aqs_annual_{group_store}_{year}.csv
         Multiple parameters with same group_store append to same file.
     """
     session = session or _client.make_session()
-    
+
     # Look up group_store category from dimPollutant.csv if not provided
     if group_store is None:
         from utils import get_parameter_group
+
         group_store = get_parameter_group(parameter_code)
-    
-    results = {"parameter": parameter_code, "analyte_name": analyte_name, "group_store": group_store, "years": {}, "status": "ok"}
+
+    results = {
+        "parameter": parameter_code,
+        "analyte_name": analyte_name,
+        "group_store": group_store,
+        "years": {},
+        "status": "ok",
+    }
     logs_dir = Path(config.ROOT) / "raw" / "aqs" / "logs"
     logs_dir.mkdir(parents=True, exist_ok=True)
 
     try:
         # Create output directory (files go directly here, no year subdirectories)
         config.RAW_ANNUAL.mkdir(parents=True, exist_ok=True)
-        
+
         # Fetch and write data year by year
-        for year_token, df in fetch_annual_by_state(parameter_code, bdate, edate, state_fips, session=session):
+        for year_token, df in fetch_annual_by_state(
+            parameter_code, bdate, edate, state_fips, session=session
+        ):
             out_path = config.RAW_ANNUAL / f"aqs_annual_{group_store}_{year_token}.csv"
             if df is None or df.empty:
                 results["years"][year_token] = {"rows": 0, "path": str(out_path)}
@@ -239,13 +263,21 @@ def write_annual_for_parameter(parameter_code: str, analyte_name: str, bdate: da
     return results
 
 
-def write_daily_for_parameter(parameter_code: str, analyte_name: str, bdate: date, edate: date, state_fips: str, session=None, group_store: str = None) -> dict:
+def write_daily_for_parameter(
+    parameter_code: str,
+    analyte_name: str,
+    bdate: date,
+    edate: date,
+    state_fips: str,
+    session=None,
+    group_store: str = None,
+) -> dict:
     """Fetch and write daily summary data for a parameter, organized by group_store and year.
-    
+
     Extracts daily statistical summaries (daily mean, max, AQI, etc.) from AQS API and
     writes to CSV files organized by pollutant group and year. API data is preserved
     exactly as returned without modification.
-    
+
     Args:
         parameter_code: AQS parameter code (e.g., "44201")
         analyte_name: Human-readable parameter name (e.g., "Ozone")
@@ -254,31 +286,40 @@ def write_daily_for_parameter(parameter_code: str, analyte_name: str, bdate: dat
         state_fips: State FIPS code
         session: Optional requests.Session for connection pooling
         group_store: Pollutant group category (auto-detected if not provided)
-    
+
     Returns:
         Dictionary with extraction results including row counts per year and status.
         Written to logs/daily_{parameter_code}_{group_store}_{timestamp}.json
-    
+
     Output Files:
         raw/aqs/daily/aqs_daily_{group_store}_{year}.csv
         Multiple parameters with same group_store append to same file.
     """
     session = session or _client.make_session()
-    
+
     # Look up group_store category from dimPollutant.csv if not provided
     if group_store is None:
         from utils import get_parameter_group
+
         group_store = get_parameter_group(parameter_code)
-    
-    results = {"parameter": parameter_code, "analyte_name": analyte_name, "group_store": group_store, "years": {}, "status": "ok"}
+
+    results = {
+        "parameter": parameter_code,
+        "analyte_name": analyte_name,
+        "group_store": group_store,
+        "years": {},
+        "status": "ok",
+    }
     logs_dir = Path(config.ROOT) / "raw" / "aqs" / "logs"
     logs_dir.mkdir(parents=True, exist_ok=True)
 
     try:
         # Create output directory (files go directly here, no year subdirectories)
         config.RAW_DAILY.mkdir(parents=True, exist_ok=True)
-        
-        for year_token, df in fetch_daily_by_state(parameter_code, bdate, edate, state_fips, session=session):
+
+        for year_token, df in fetch_daily_by_state(
+            parameter_code, bdate, edate, state_fips, session=session
+        ):
             out_path = config.RAW_DAILY / f"aqs_daily_{group_store}_{year_token}.csv"
             if df is None or df.empty:
                 results["years"][year_token] = {"rows": 0, "path": str(out_path)}

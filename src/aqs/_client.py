@@ -4,6 +4,7 @@ Provides a requests.Session configured with retries and a simple global
 rate-limiter to comply with AQS API guidance. Also includes helpers to build
 calendar-year chunks used by several AQS services.
 """
+
 from __future__ import annotations
 
 import time
@@ -15,7 +16,6 @@ import json
 
 import pandas as pd
 import requests
-from urllib.parse import parse_qs, urlparse
 from email.utils import parsedate_to_datetime
 
 import config
@@ -34,8 +34,8 @@ _RETRY_MAX_WAIT = int(getattr(config, "AQS_RETRY_MAX_WAIT", 30))
 _DEFAULT_TIMEOUT = int(getattr(config, "AQS_TIMEOUT", 30))
 
 # Circuit-breaker configuration
-_CIRCUIT_THRESHOLD = int(config.__dict__.get('AQS_CIRCUIT_THRESHOLD', 5))
-_CIRCUIT_COOLDOWN = int(config.__dict__.get('AQS_CIRCUIT_COOLDOWN', 1800))  # seconds
+_CIRCUIT_THRESHOLD = int(config.__dict__.get("AQS_CIRCUIT_THRESHOLD", 5))
+_CIRCUIT_COOLDOWN = int(config.__dict__.get("AQS_CIRCUIT_COOLDOWN", 1800))  # seconds
 
 
 def _sleep_if_needed() -> None:
@@ -172,7 +172,7 @@ def _sleep_backoff(attempt: int, retry_after: int | None = None) -> None:
         wait = min(retry_after, _RETRY_MAX_WAIT)
     else:
         # exponential backoff with jitter
-        base = _BACKOFF_FACTOR * (2 ** attempt)
+        base = _BACKOFF_FACTOR * (2**attempt)
         jitter = base * 0.1
         wait = min(_RETRY_MAX_WAIT, base + (jitter * (2 * (time.time() % 1) - 1)))
         if wait < 0:
@@ -193,7 +193,9 @@ def fetch_json(session: requests.Session, url: str) -> dict:
     last_exc = None
     for attempt in range(_AQS_RETRIES + 1):
         try:
-            resp = session.get(url, timeout=getattr(session, "timeout", _DEFAULT_TIMEOUT))
+            resp = session.get(
+                url, timeout=getattr(session, "timeout", _DEFAULT_TIMEOUT)
+            )
             # if service tells us to slow down, honor it
             if resp.status_code == 429:
                 retry_after = _parse_retry_after(resp)
@@ -207,13 +209,21 @@ def fetch_json(session: requests.Session, url: str) -> dict:
         except requests.exceptions.RequestException as exc:
             last_exc = exc
             # server-side 5xx errors should increment failure counter
-            status = getattr(exc.response, "status_code", None) if hasattr(exc, "response") else None
+            status = (
+                getattr(exc.response, "status_code", None)
+                if hasattr(exc, "response")
+                else None
+            )
             if status and 500 <= status < 600:
                 _open_circuit()
             # allow backoff and retry
             retry_after = None
             try:
-                retry_after = _parse_retry_after(exc.response) if hasattr(exc, "response") and exc.response is not None else None
+                retry_after = (
+                    _parse_retry_after(exc.response)
+                    if hasattr(exc, "response") and exc.response is not None
+                    else None
+                )
             except Exception:
                 retry_after = None
             if attempt < _AQS_RETRIES:
