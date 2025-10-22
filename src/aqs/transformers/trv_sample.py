@@ -71,9 +71,9 @@ def _convert_to_ug_m3(
         # µg/m³ = ppb × MW / 24.45
         return (v * mol_weight) / 24.45 if pd.notna(mol_weight) else math.nan
     if unit_norm == "ppbc":
-        # µg/m³ = ppbC × (MW / carbon_atoms) × (24.45 / 1000)
+        # µg/m³ = (ppbC × MW) / (carbon_atoms × 24.45)
         if pd.notna(mol_weight) and pd.notna(carbon_atoms) and carbon_atoms > 0:
-            return (v * mol_weight * 24.45) / (carbon_atoms * 1000.0)
+            return (v * mol_weight) / (carbon_atoms * 24.45)
         return math.nan
     if unit_norm == "ppm":
         # 1 ppm = 1000 ppb
