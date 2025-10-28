@@ -36,7 +36,7 @@ END_YEAR = EDATE.year
 # Data lake root and layer paths
 # All output written to DATAREPO_ROOT data lake, organized by layer and service
 ROOT = Path(os.environ["DATAREPO_ROOT"]).expanduser()
-RAW = ROOT / "raw" / "aqs" / "monitors"  # Legacy monitors path
+RAW = ROOT / "raw" / "aqs" / "monitors"  # Monitors path
 RAW_SAMPLE = ROOT / "raw" / "aqs" / "sample"  # Sample data (hourly/sub-daily)
 RAW_DAILY = ROOT / "raw" / "aqs" / "daily"  # Daily summaries
 RAW_ANNUAL = ROOT / "raw" / "aqs" / "annual"  # Annual aggregates
@@ -47,7 +47,7 @@ CTL_DIR = ROOT / "raw" / "aqs" / "_ctl"  # Control files (circuit breaker health
 # Parameter definitions
 PARAMS_CSV = Path("ops/parameters.csv")
 
-# Sample extraction mode: "by_state" (default) or "by_site" (legacy)
+# Sample extraction mode: "by_state" (default) or "by_site"
 # by_state: Fetch all sites at once, memory-efficient streaming
 # by_site: Fetch site-by-site, slower but more granular
 SAMPLE_MODE = os.getenv("SAMPLE_MODE", "by_state")
@@ -86,16 +86,25 @@ def ensure_dirs(*paths: Path) -> None:
 def set_aqs_credentials() -> None:
     """Validate and register EPA AQS API credentials with pyaqsapi library.
 
+    Performs input validation on credentials before registering them.
     Lazy-loads pyaqsapi dependency to avoid requiring network libraries at module
     import time. This allows tests and lightweight scripts to import config without
     pulling in requests and other heavy dependencies.
 
     Raises:
-        ValueError: If AQS_EMAIL or AQS_KEY environment variables are missing
+        ValueError: If AQS_EMAIL or AQS_KEY environment variables are missing or invalid
         ImportError: If pyaqsapi package is not installed
     """
     if not AQS_EMAIL or not AQS_KEY:
         raise ValueError("Missing AQS_EMAIL or AQS_KEY in environment")
+
+    # Validate email format
+    if "@" not in AQS_EMAIL or "." not in AQS_EMAIL:
+        raise ValueError("AQS_EMAIL does not appear to be a valid email address")
+
+    # Validate key format (AQS keys are typically alphanumeric, reasonable length)
+    if len(AQS_KEY.strip()) < 10:
+        raise ValueError("AQS_KEY appears to be invalid (too short)")
 
     # Lazy import: only load pyaqsapi when credentials are actually needed
     # This avoids forcing the dependency at module import time

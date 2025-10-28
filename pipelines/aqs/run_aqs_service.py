@@ -24,6 +24,13 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
 
 import config
+from logging_config import (
+    setup_logging,
+    get_logger,
+    log_pipeline_start,
+    log_pipeline_end,
+    log_error_with_context,
+)
 from aqs.extractors.aqs_service import fetch_samples_dispatch
 from aqs.extractors.data import write_annual_for_parameter, write_daily_for_parameter
 from aqs.transformers.trv_sample import transform_toxics_trv
@@ -437,8 +444,17 @@ def run() -> None:
         AQS_EMAIL: EPA AQS API email credential
         AQS_KEY: EPA AQS API key credential
     """
-    print("🚀 Starting AQS Pipeline Execution")
-    print(f"📅 Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    # Setup logging
+    log_level = "DEBUG" if TEST_MODE else "INFO"
+    setup_logging(level=log_level, verbose=TEST_MODE)
+
+    logger = get_logger(__name__)
+    log_pipeline_start(
+        "AQS Full Pipeline", start_year=config.BDATE.year, end_year=config.EDATE.year
+    )
+
+    logger.info("🚀 Starting AQS Pipeline Execution")
+    logger.info(f"📅 Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
 
     # Setup and validation
     config.ensure_dirs(
@@ -457,7 +473,10 @@ def run() -> None:
             "reason": "AQS circuit is open; skipping heavy extraction",
         }
         atomic_write_json(manifest_dir / "run_manifest_degraded.json", degraded)
-        print("❌ AQS circuit is open — wrote degraded manifest and exiting")
+        logger.warning("❌ AQS circuit is open — wrote degraded manifest and exiting")
+        log_pipeline_end(
+            "AQS Full Pipeline", success=False, reason="circuit_breaker_open"
+        )
         return
 
     # Load parameter lists
@@ -507,12 +526,20 @@ def run() -> None:
         run_daily_service(years, criteria_params, config.STATE)
         # run_transform_service()  # Skipped for extraction only
 
-        print("\n" + "=" * 60)
-        print("🎉 AQS PIPELINE EXECUTION COMPLETE")
-        print("=" * 60)
+        logger.info("=" * 60)
+        logger.info("🎉 AQS PIPELINE EXECUTION COMPLETE")
+        logger.info("=" * 60)
+        log_pipeline_end(
+            "AQS Full Pipeline",
+            success=True,
+            total_years=len(years),
+            total_params=len(all_params),
+        )
 
     except Exception as e:
-        print(f"\n❌ Pipeline execution failed: {e}")
+        log_error_with_context(e, "AQS Full Pipeline", pipeline_stage="execution")
+        logger.error(f"❌ Pipeline execution failed: {e}")
+        log_pipeline_end("AQS Full Pipeline", success=False, error=str(e))
         raise
 
 

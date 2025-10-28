@@ -1,9 +1,7 @@
 """Metadata pipeline orchestration for AQS services.
 
-This runner replaces the old `run_monitors.py` naming and is intended to
-orchestrate metadata-level extraction (monitors and other metadata-centric
-endpoints) for AQS. It keeps the same runtime behavior and function signature
-(`run()`) so existing callers can continue to use a simple `run()` entrypoint.
+This runner orchestrates metadata-level extraction (monitors and other
+metadata-centric endpoints) for AQS. It provides a simple `run()` entrypoint.
 """
 
 from __future__ import annotations

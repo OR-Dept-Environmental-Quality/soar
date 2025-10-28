@@ -1,8 +1,7 @@
 """Compatibility wrapper for historical sample extractor API.
 
-This module re-exports the new consolidated data extractors from
-`soar.aqs.extractors.data` to preserve the previous import surface for
-callers while allowing the codebase to move to the consolidated module.
+This module re-exports the consolidated data extractors from
+`soar.aqs.extractors.data` to preserve the previous import surface.
 """
 
 from __future__ import annotations
@@ -12,19 +11,19 @@ from datetime import date
 
 from aqs.extractors.data import (
     fetch_samples_by_state,
+    fetch_samples_for_parameter,
     fetch_annual_by_state,
     write_annual_for_parameter,
 )
-from aqs.extractors.monitors import fetch_samples_for_parameter
 
 
 def fetch_samples_dispatch(
     parameter_code: str, bdate: date, edate: date, state_fips: str, session=None
 ):
-    """Backward-compatible dispatcher kept for callers.
+    """Dispatch to appropriate sample fetcher based on configuration.
 
-    Returns either a generator yielding (year, df) (by_state) or a DataFrame
-    (per-site) consistent with the older interface.
+    Returns either a generator yielding (year, df) or a DataFrame
+    consistent with the interface.
     """
     import config
 

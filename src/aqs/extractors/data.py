@@ -79,14 +79,13 @@ def fetch_samples_by_state(
 
 
 def fetch_samples_for_parameter(
-    parameter_code: str, bdate: date, edate: date, state_fips: str, session=None
+    parameter_code: str, bdate: date, edate: date, state_fips: str
 ) -> pd.DataFrame:
-    """Backward-compatible helper: fetch sample data for a parameter and return a single concatenated DataFrame.
+    """Fetch sample data for a parameter and return a single concatenated DataFrame.
 
-    Historically callers requested a single DataFrame for a parameter (per-site). The consolidated
-    `fetch_samples_by_state` yields year-by-year DataFrames for streaming. This helper consumes that
-    generator and concatenates non-empty yearly frames into a single DataFrame, preserving all API
-    fields without modification.
+    Historically callers requested a single DataFrame for a parameter. This helper
+    consumes the year-by-year generator and concatenates non-empty yearly frames
+    into a single DataFrame, preserving all API fields without modification.
 
     Returns an empty DataFrame if no data was returned.
     """

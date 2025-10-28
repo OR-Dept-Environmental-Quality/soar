@@ -30,7 +30,9 @@ def run():
     # Date range
     bdate = date(2005, 1, 1)
     edate = date(2025, 12, 31)
-    print(f"📅 Processing monitors from {bdate} to {edate} (iterating through each calendar year)")
+    print(
+        f"📅 Processing monitors from {bdate} to {edate} (iterating through each calendar year)"
+    )
 
     # Fetch monitors
     print("\n📡 Fetching monitor metadata from AQS API...")

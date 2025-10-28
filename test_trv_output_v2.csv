@@ -1,4 +1,0 @@
-site_code,latitude,longitude,county,parameter_code,poc,parameter,date_local,sample_measurement,units_of_measure,sample_measurement_ug_m3,trv_cancer,trv_noncancer,trv_acute,xtrv_cancer,xtrv_noncancer,xtrv_acute,sample_duration,sample_frequency,detection_limit,uncertainty,qualifier,method_type,method,method_code
-410410001,,,,17147,1,Acenaphthene,2020-01-01,0.1,Micrograms/cubic meter (LC),0.1,,,,,,,24 HOUR,EVERY DAY,0.01,,,FEM,MODIFIED TIM,001
-410410001,,,,17242,1,Benzo(a)pyrene,2020-01-01,0.05,Micrograms/cubic meter (LC),0.05,0.0017,0.002,0.002,29.411764705882355,25.0,25.0,24 HOUR,EVERY DAY,0.01,,,FEM,MODIFIED TIM,001
-410410001,,,,43828,1,Benzene,2020-01-01,5.0,Parts per billion,33.503067852760736,,,,,,,1 HOUR,CONTINUOUS,0.1,,,INSTRUMENTAL - NON-Integrated,INSTRUMENTAL - Gas Chromatography,002
