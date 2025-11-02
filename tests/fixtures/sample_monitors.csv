@@ -1,0 +1,4 @@
+date_local,time_local,sample_frequency,qualifier,units_of_measure,sample_measurement,method,method_type,method_code,poc,site,latitude,longitude
+2020-01-01,12:00,hourly, ,Parts per million,0.025,BAM-102,Gravimetric,102,1,1,45.1,-122.1
+2020-01-02,,daily, ,Parts per billion,15,Manual,Manual,200,1,1,45.1,-122.1
+2020-01-03,13:00,hourly,QF Parts per million,0.030,BAM-102,Gravimetric,102,1,1,45.1,-122.1

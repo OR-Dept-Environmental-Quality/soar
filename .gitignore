@@ -1,0 +1,8 @@
+﻿__pycache__/
+*.pyc
+.venv/
+.env
+.vscode/
+.pytest_cache/
+datarepo_test/
+metadata/*.json

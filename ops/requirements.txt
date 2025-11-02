@@ -1,0 +1,10 @@
+pyaqsapi
+pandas
+pyarrow
+python-dotenv
+python-json-logger
+ruff
+black
+pytest
+pandera
+
