@@ -1,0 +1,7 @@
+{
+  "error": "aqsSiteParameters.csv is missing required columns",
+  "found_columns": [
+    "aqs_parameter",
+    "aqs_name"
+  ]
+}
