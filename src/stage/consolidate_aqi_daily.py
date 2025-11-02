@@ -21,7 +21,33 @@ sys.path.insert(0, str(ROOT / "src"))
 import config
 
 
-def consolidate_aqi_daily_for_year(year: str, transform_dir: Path) -> pd.DataFrame:
+def load_aqi_categories() -> pd.DataFrame:
+    """Load AQI category definitions from dimAQI.csv."""
+    dim_aqi_path = ROOT / "ops" / "dimAQI.csv"  # ops is at repo root level
+    try:
+        df = pd.read_csv(dim_aqi_path)
+        # Get unique AQI ranges and categories (since categories are the same across pollutants)
+        categories = df[['aqi_category', 'low_aqi', 'high_aqi']].drop_duplicates()
+        return categories.sort_values('low_aqi')
+    except Exception as e:
+        print(f"❌ Error loading dimAQI.csv: {e}")
+        return pd.DataFrame()
+
+
+def get_aqi_category(aqi_value: float, categories_df: pd.DataFrame) -> str:
+    """Determine AQI category based on AQI value."""
+    if pd.isna(aqi_value):
+        return None
+    
+    # Find the category where low_aqi <= aqi_value <= high_aqi
+    for _, row in categories_df.iterrows():
+        if row['low_aqi'] <= aqi_value <= row['high_aqi']:
+            return row['aqi_category']
+    
+    return None  # Should not happen with valid AQI values
+
+
+def consolidate_aqi_daily_for_year(year: str, transform_dir: Path, categories_df: pd.DataFrame) -> pd.DataFrame:
     """Consolidate AQI daily data for a specific year.
 
     Reads the transformed AQI daily data, consolidates multiple pollutants per site/date
@@ -121,12 +147,16 @@ def consolidate_aqi_daily_for_year(year: str, transform_dir: Path) -> pd.DataFra
     # Calculate overall AQI as max of ozone_aqi and pm25_aqi
     result['aqi'] = result[['ozone_aqi', 'pm25_aqi']].max(axis=1)
 
+    # Add AQI category based on the overall AQI value
+    result['aqi_category'] = result['aqi'].apply(lambda x: get_aqi_category(x, categories_df))
+
     # Select final columns in the required order
     final_columns = [
         'site_code',
         'date_local',
         'event_type',
         'aqi',
+        'aqi_category',
         'ozone_poc',
         'ozone_observation_percent',
         'ozone_validity_indicator',
@@ -159,6 +189,12 @@ def run_consolidation():
     """Run the AQI daily consolidation pipeline."""
     print("🚀 Starting AQI Daily Consolidation Pipeline")
 
+    # Load AQI categories for classification
+    categories_df = load_aqi_categories()
+    if categories_df.empty:
+        print("❌ Could not load AQI categories from dimAQI.csv")
+        return
+
     # Input directory (transformed AQI data)
     transform_dir = config.ROOT / "transform" / "aqi"
     if not transform_dir.exists():
@@ -180,7 +216,7 @@ def run_consolidation():
         print(f"\n📅 Consolidating year {year_str}...")
 
         # Consolidate data for this year
-        consolidated_df = consolidate_aqi_daily_for_year(year_str, transform_dir)
+        consolidated_df = consolidate_aqi_daily_for_year(year_str, transform_dir, categories_df)
 
         if consolidated_df.empty:
             print(f"⚠️  No consolidated data for year {year_str}, skipping")
