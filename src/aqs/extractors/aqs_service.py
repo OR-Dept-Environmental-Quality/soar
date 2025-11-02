@@ -1,7 +1,7 @@
 """Compatibility wrapper for historical sample extractor API.
 
 This module re-exports the consolidated data extractors from
-`soar.aqs.extractors.data` to preserve the previous import surface.
+`soar.aqs.extractors.measurements` to preserve the previous import surface.
 """
 
 from __future__ import annotations
@@ -9,7 +9,7 @@ from __future__ import annotations
 from datetime import date
 
 
-from aqs.extractors.data import (
+from aqs.extractors.measurements import (
     fetch_samples_by_state,
     fetch_samples_for_parameter,
     fetch_annual_by_state,

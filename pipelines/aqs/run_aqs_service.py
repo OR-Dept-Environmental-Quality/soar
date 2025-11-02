@@ -32,7 +32,7 @@ from logging_config import (
     log_error_with_context,
 )
 from aqs.extractors.aqs_service import fetch_samples_dispatch
-from aqs.extractors.data import write_annual_for_parameter, write_daily_for_parameter
+from aqs.extractors.measurements import write_annual_for_parameter, write_daily_for_parameter
 from aqs.transformers.trv_sample import transform_toxics_trv
 from aqs.transformers.trv_annual import transform_toxics_annual_trv
 from loaders.filesystem import write_csv, append_csv, atomic_write_json
