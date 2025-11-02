@@ -1,0 +1,113 @@
+group_store,analyte_group,analyte_name_deq,cas_number,mol_weight_g_mol,pah_toxicity_equivalent_factor,trv_cancer,trv_noncancer,trv_acute,aqs_parameter,carbon_atoms,tier
+toxics,PAHs,Acenaphthene,83-32-9,154.21,,,,,17147,12,II
+toxics,PAHs,Acenaphthylene,208-96-8,152.19,,,,,17148,12,II
+toxics,PAHs,Anthracene,120-12-7,178.23,0,,,,17151,14,II
+toxics,PAHs,Benzo(a)anthracene,56-55-3,228.3,0.2,0.0083,,,17215,14,II
+toxics,PAHs,Benzo(a)pyrene,50-32-8,252.3,1,0.0017,0.002,0.002,17242,20,I
+toxics,PAHs,Benzo(b)fluoranthene,205-99-2,252.3,0.8,0.0021,,,17220,16,II
+toxics,PAHs,Benzo(e)pyrene,192-97-2,252.3,,,,,17224,18,II
+toxics,PAHs,"Benzo(g,h,i)perylene",191-24-2,276.3,0.009,0.19,,,17237,20,III
+toxics,PAHs,Benzo(k)fluoranthene,207-08-9,252.3,0.03,0.056,,,17223,16,II
+toxics,PAHs,Chrysene,218-01-9,228.3,0.1,0.017,,,17208,18,II
+toxics,PAHs,Coronene,191-07-1,300.4,,,,,17211,24,III
+toxics,PAHs,"Dibenzo(a,h)anthracene",53-70-3,278.3,10,0.00017,,,17231,20,II
+toxics,PAHs,Dibenzofuran,132-64-9,168.19,,,,,18202,12,III
+toxics,PAHs,Dibenzothiophene,132-65-0,184.26,,,,,17245,12,III
+toxics,PAHs,Fluoranthene,206-44-0,202.25,0.08,0.021,,,17201,16,II
+toxics,PAHs,Fluorene,86-73-7,166.22,,,,,17149,16,II
+toxics,PAHs,"Indeno(1,2,3-cd)pyrene",193-39-5,276.3,0.07,0.024,,,17243,20,II
+toxics,PAHs,Naphthalene,91-20-3,128.169,,0.029,3.7,200,17141,10,I
+toxics,PAHs,Perylene,198-55-0,252.3,,,,,17212,22,III
+toxics,PAHs,Phenanthrene,85-01-8,178.23,0,,,,17150,14,II
+toxics,PAHs,Pyrene,129-00-0,202.25,0,,,,17204,16,II
+toxics,Metals,Hexavalent Chromium [Cr(VI)],18540-29-9,51.996,,0.000083,0.2,0.3,14115,,II
+toxics,Carbonyls,"2,5-Dimethylbenzaldehyde",5779-94-2,134.17,,,,,45503,8,III
+toxics,Carbonyls,Acetaldehyde,75-07-0,44.05,,0.45,140,470,43503,2,I
+toxics,Carbonyls,Benzaldehyde,100-52-7,106.12,,,,,45501,7,III
+toxics,Carbonyls,Butyraldehyde & Isobutyraldehyde,123-72-8,72.11,,,,,43329,4,III
+toxics,Carbonyls,Crotonaldehyde,123-73-9,70.09,,,,,43516,4,III
+toxics,Carbonyls,Formaldehyde,50-00-0,30.026,,0.17,9,49,43502,1,I
+toxics,Carbonyls,Hexaldehyde,66-25-1,100.16,,,,,43517,6,III
+toxics,Carbonyls,Isovaleraldehyde,590-86-3,86.13,,,,,43513,5,III
+toxics,Carbonyls,m-Tolualdehyde,620-23-5,120.15,,,,,45508,8,III
+toxics,Carbonyls,o-Tolualdehyde,529-20-4,120.15,,,,,45505,8,III
+toxics,Carbonyls,Propionaldehyde,123-38-6,58.08,,,8,,43504,3,III
+toxics,Carbonyls,p-Tolualdehyde,104-87-0,120.15,,,,,45507,8,III
+toxics,Carbonyls,Valeraldehyde,110-62-3,86.13,,,,,43518,5,III
+toxics,VOCs,"1,1,1-Trichloroethane",71-55-6,133.4100037,,,5000,11000,43814,2,III
+toxics,VOCs,"1,1,2,2-Tetrachloroethane",79-34-5,167.8500061,,0.017,,,43818,2,I
+toxics,VOCs,"1,1,2-Trichloroethane",79-00-5,133.4100037,,0.063,,,43820,2,II
+toxics,VOCs,"1,1-Dichloroethane",75-34-3,98.95999908,,0.63,,,43813,2,III
+toxics,VOCs,"1,1-Dichloroethylene",75-35-4,96.94300079,,,200,200,43826,2,III
+toxics,VOCs,"1,2,4-Trichlorobenzene",120-82-1,181.4499969,,,,,45810,6,II
+toxics,VOCs,"1,2,4-Trimethylbenzene",95-63-6,120.1999969,,,60,,45208,9,III
+toxics,VOCs,"1,2-Dibromoethane (EDB)",106-93-4,187.8600006,,0.0017,9,,43843,2,III
+toxics,VOCs,"1,2-Dichlorobenzene",95-50-1,147.0019989,,,,,45805,6,III
+toxics,VOCs,"1,2-Dichloroethane (EDC)",107-06-2,98.95999908,,0.038,7,,43815,2,III
+toxics,VOCs,"1,2-Dichloropropane",78-87-5,112.9899979,,,,230,43829,3,III
+toxics,VOCs,"1,2-Dimethylbenzene",95-47-6,106.1699982,,,,8700,45204,8,II
+toxics,VOCs,"1,3,5-Trimethylbenzene",108-67-8,120.1900024,,,60,,45207,9,III
+toxics,VOCs,"1,3-Butadiene",106-99-0,54.09000015,,0.033,2,660,43218,4,I
+toxics,VOCs,"1,3-Dichlorobenzene",541-73-1,147.0019989,,,,,45806,6,II
+toxics,VOCs,"1,4-Dichlorobenzene",106-46-7,147.0019989,,0.091,60,12000,45807,6,II
+toxics,VOCs,"1,4-Dimethylbenzene + 1,3-Dimethylbenzene",108-38-3,106.1699982,,,,8700,45205,12,II
+toxics,VOCs,"1,4-Dioxane",123-91-1,88.11000061,,0.2,30,7200,46201,4,III
+toxics,VOCs,2-Butanone (MEK),78-93-3,72.11000061,,,,5000,43552,4,II
+toxics,VOCs,"2-Chloro-1,3-butadiene",126-99-8,88.54000092,,0.0033,20,,43835,4,II
+toxics,VOCs,2-Hexanone,591-78-6,100.1600037,,,,,43559,6,III
+toxics,VOCs,4-Ethyltoluene,622-96-8,120.1999969,,,,,45213,8,III
+toxics,VOCs,4-Methyl-2-pentanone (MIBK),108-10-1,100.1600037,,,3000,,43560,6,II
+toxics,VOCs,Acetone,67-64-1,58.07899857,,,31000,62000,43551,3,III
+toxics,VOCs,Acetonitrile,75-05-8,41.05199814,,,60,,43702,2,II
+toxics,VOCs,Acrolein,107-02-8,56.06299973,,,0.35,6.9,43509,3,I
+toxics,VOCs,Acrylonitrile,107-13-1,53.06299973,,0.015,5,220,43704,3,I
+toxics,VOCs,Benzene,71-43-2,78.11000061,,0.13,3,29,45201,6,I
+toxics,VOCs,Benzyl chloride,100-44-7,126.5899963,,0.02,1,240,45809,7,III
+toxics,VOCs,Bromodichloromethane,75-27-4,163.8300018,,,,,43828,1,III
+toxics,VOCs,Bromoform,75-25-2,252.73,,0.91,,,43806,1,II
+toxics,VOCs,Bromomethane,74-83-9,94.93900299,,,,3900,43819,1,III
+toxics,VOCs,Carbon disulfide,75-15-0,76.14299774,,,,6200,42153,1,II
+toxics,VOCs,Carbon tetrachloride,56-23-5,153.8200073,,0.17,100,1900,43804,1,I
+toxics,VOCs,Chlorobenzene,108-90-7,112.5599976,,,,,45801,6,II
+toxics,VOCs,Chloroethane,75-00-3,64.51399994,,,,40000,43812,2,III
+toxics,VOCs,Chloroform,67-66-3,119.3799973,,,300,490,43803,1,I
+toxics,VOCs,Chloromethane,74-87-3,50.48699951,,,,1000,43801,1,III
+toxics,VOCs,"cis-1,2-Dichloroethene",156-59-2,96.94000244,,,,,43839,2,III
+toxics,VOCs,"cis-1,3-Dichloropropene",10061-01-5,110.9700012,,,,,43831,3,I
+toxics,VOCs,Cyclohexane,110-82-7,84.16000366,,,,,43248,6,III
+toxics,VOCs,Dibromochloromethane,124-48-1,208.2799988,,,,,43832,1,III
+toxics,VOCs,Dichlorodifluoromethane (Freon 12),75-71-8,120.9100037,,,,,43823,1,III
+toxics,VOCs,Dichlorotetrafluoroethane (Freon 114),76-14-2,170.9199982,,,,,16822,2,III
+toxics,VOCs,Ethyl Acrylate,140-88-5,100.117,,0.071,,,43438,5,II
+toxics,VOCs,Ethylbenzene,100-41-4,106.1699982,,0.4,260,22000,45203,8,II
+toxics,VOCs,Ethylene oxide,75-21-8,44.052,,0.0002,,,43601,2,I
+toxics,VOCs,"Hexachloro-1,3-butadiene",87-68-3,260.7600098,,0.045,,,43844,4,II
+toxics,VOCs,Isopropanol,67-63-0,60.09999847,,,,3200,43312,3,III
+toxics,VOCs,Methyl tert-butyl ether (MTBE),1634-04-4,88.15000153,,3.8,8000,8000,43372,5,II
+toxics,VOCs,Methylene chloride,75-09-2,84.93199921,,100,600,2100,43802,1,I
+toxics,VOCs,Methylmethacrylate,80-62-6,100.1200027,,,700,,43441,4,II
+toxics,VOCs,n-Heptane,142-82-5,100.2099991,,,,,43232,7,III
+toxics,VOCs,n-Hexane,110-54-3,86.18000031,,,,,43231,6,III
+toxics,VOCs,Styrene,100-42-5,104.1500015,,,1000,21000,45220,8,II
+toxics,VOCs,Tetrachloroethylene,127-18-4,165.8300018,,3.8,41,41,43817,2,I
+toxics,VOCs,Tetrahydrofuran,109-99-9,72.11000061,,,,,46401,4,III
+toxics,VOCs,Toluene,108-88-3,92.13999939,,,5000,7500,45202,7,II
+toxics,VOCs,"trans-1,2-Dichloroethene",156-60-5,96.94300079,,,,790,43838,2,III
+toxics,VOCs,Trichloroethylene,79-01-6,131.3899994,,0.24,2.1,2.1,43824,2,I
+toxics,VOCs,Trichlorofluoromethane (Freon 11),75-69-4,137.3699951,,,,,43811,1,III
+toxics,VOCs,Trichlotrifluoroethane (freon 113),76-13-1,187.3800049,,,,,43821,1,III
+toxics,VOCs,Vinyl chloride,75-01-4,62.4980011,,0.11,,1300,43860,2,I
+toxics,VOCs,"trans-1,3-Dichloropropene",10061-02-6,110.9700012,,,,,43830,3,III
+toxics,Metals,"Antimony, Total",7440-36-0,121.76,,,0.3,1,85102,,II
+toxics,Metals,"Arsenic, Total",7440-38-2,74.921,,0.00023,0.015,0.2,85103,,I
+toxics,Metals,"Beryllium, Total",7440-41-7,9.012,,0.00042,0.007,0.02,85105,,I
+toxics,Metals,"Cadmium, Total",7440-43-9,112.41,,0.00056,0.01,0.03,85110,,I
+toxics,Metals,"Chromium, Total",7440-47-3,51.996,,0.000083,0.2,0.3,85112,,II
+toxics,Metals,"Cobalt, Total",7440-48-4,58.933,,,0.1,,85113,,II
+toxics,Metals,"Lead, Total",7439-92-1,207,,,0.15,0.15,85128,,I
+toxics,Metals,"Manganese, Total",7439-96-5,54.938,,,0.09,0.3,85132,,I
+toxics,Metals,"Nickel, Total",7440-02-0,58.693,,0.0038,0.014,0.2,85136,,I
+toxics,Metals,"Selenium, Total",7782-49-2,78.97,,,,2,85154,,II
+pm25,PM25,PM2.5 Estimate,,,,,,,88502,,
+pm2.5,PM25,PM2.5 FRM,,,,,,,88101,,
+ozone,Ozone,Ozone,,,,,,,44201,,

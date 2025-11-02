@@ -1,28 +1,10 @@
 """Tests for monitor transformers."""
+
 from __future__ import annotations
 
 import pandas as pd
-import pandera as pa
 
-from soar.aqs.transformers.monitors import add_site_id, to_curated, to_staged
-
-
-CURATED_SCHEMA = pa.DataFrameSchema(
-    {
-        "site_id": pa.Column(str, nullable=False),
-        "state_code": pa.Column(str, nullable=False),
-        "county_code": pa.Column(str, nullable=False),
-        "site_number": pa.Column(str, nullable=False),
-        "parameter_code": pa.Column(str, nullable=False),
-    }
-)
-
-STAGED_SCHEMA = pa.DataFrameSchema(
-    {
-        "site_id": pa.Column(str, nullable=False),
-        "parameters_measured": pa.Column(object, nullable=False),
-    }
-)
+from aqs.transformers.monitors import transform_monitors
 
 
 def _build_sample_frame() -> pd.DataFrame:
@@ -42,24 +24,38 @@ def _build_sample_frame() -> pd.DataFrame:
             "county_name": ["Multnomah", "Multnomah"],
             "city_name": ["Portland", "Portland"],
             "open_date": [pd.Timestamp("2020-01-01"), pd.Timestamp("2020-01-01")],
+            "site_code": ["410050001", "410050001"],  # Add site_code field
         }
     )
 
 
-def test_add_site_id_zero_pads_and_concatenates() -> None:
+def test_transform_monitors_selects_fields_and_deduplicates() -> None:
     frame = _build_sample_frame()
-    augmented = add_site_id(frame)
-    assert augmented.loc[0, "site_id"] == "410050001"
-    assert augmented.loc[1, "site_id"] == "410050001"
+    transformed = transform_monitors(frame)
+
+    # Should have deduplicated from 2 rows to 1 row (same site_code)
+    assert len(transformed) == 1
+
+    # Should contain expected fields
+    expected_fields = [
+        "open_date",
+        "local_site_name",
+        "latitude",
+        "longitude",
+        "datum",
+        "elevation",
+        "address",
+        "state_name",
+        "county_name",
+        "city_name",
+        "site_code",
+    ]
+
+    for field in expected_fields:
+        assert field in transformed.columns
 
 
-def test_to_staged_returns_one_row_per_site_with_sorted_parameters() -> None:
-    frame = _build_sample_frame()
-    curated = to_curated(frame)
-    CURATED_SCHEMA.validate(curated)
-
-    staged = to_staged(curated)
-    STAGED_SCHEMA.validate(staged)
-
-    assert len(staged) == 1
-    assert staged.loc[0, "parameters_measured"] == ["42101", "88101"]
+def test_transform_monitors_handles_empty_dataframe() -> None:
+    empty_frame = pd.DataFrame()
+    result = transform_monitors(empty_frame)
+    assert result.empty

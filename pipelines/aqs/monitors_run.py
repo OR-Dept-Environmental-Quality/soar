@@ -9,10 +9,10 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
 
-from soar import config
-from soar.aqs.extractors.monitors import fetch_monitors
-from soar.aqs.transformers.monitors import add_site_id, to_curated, to_staged
-from soar.loaders.filesystem import write_csv, write_parquet
+from soar import config  # noqa: E402
+from soar.aqs.extractors.monitors import fetch_monitors  # noqa: E402
+from soar.aqs.transformers.monitors import add_site_id, to_curated, to_staged  # noqa: E402
+from soar.loaders.filesystem import write_csv, write_parquet  # noqa: E402
 
 RAW_PARQUET = config.RAW / "monitors_raw.parquet"
 RAW_CSV = config.RAW / "monitors_raw.csv"
