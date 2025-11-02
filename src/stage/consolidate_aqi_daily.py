@@ -91,7 +91,7 @@ def consolidate_aqi_daily_for_year(year: str, transform_dir: Path) -> pd.DataFra
     all_sites_dates = pd.concat([
         df[['site_code', 'date_local', 'event_type']].drop_duplicates()
         for df in [ozone_df, pm25_consolidated] if not df.empty
-    ]).drop_duplicates()
+    ]).drop_duplicates(subset=['site_code', 'date_local'])
 
     # Merge ozone data
     result = all_sites_dates.copy()
@@ -146,6 +146,9 @@ def consolidate_aqi_daily_for_year(year: str, transform_dir: Path) -> pd.DataFra
 
     # Remove rows where aqi is NaN (no valid pollutants)
     result = result.dropna(subset=['aqi'])
+
+    # Ensure uniqueness by site_code and date_local
+    result = result.drop_duplicates(subset=['site_code', 'date_local'])
 
     print(f"✅ Consolidated AQI data for year {year}: {len(result)} site-date records")
 
