@@ -100,9 +100,6 @@ def transform_aqi_daily(raw_daily_files: List[Path]) -> pd.DataFrame:
         "method_code",
         "method",
         "site_code",
-        "latitude",
-        "longitude",
-        "county",
     ]
 
     # Filter to only the fields that exist in the data
@@ -115,13 +112,11 @@ def transform_aqi_daily(raw_daily_files: List[Path]) -> pd.DataFrame:
     # Select the available fields
     transformed = combined[available_fields].copy()
 
-    # Remove rows where aqi field is empty (NaN, None, or empty string)
+    # Filter out records with empty AQI values
     transformed = transformed.dropna(subset=["aqi"])
     transformed = transformed[transformed["aqi"] != ""]
 
-    # Remove duplicates - the user said "remove any duplicate records after eliminating redundant columns"
-    # This likely means drop duplicates based on all columns except perhaps some redundant ones
-    # For now, I'll drop exact duplicates
+    # Remove exact duplicate records after field selection
     original_count = len(transformed)
     transformed = transformed.drop_duplicates()
     deduped_count = len(transformed)

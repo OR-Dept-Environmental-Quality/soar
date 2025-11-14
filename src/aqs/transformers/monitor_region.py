@@ -1,3 +1,9 @@
-#### Add function that takes output from monitors.py transformer and mapps the monitors to specific regions. 
-### Add the reference file/shapfile to soar_pipelin/ops dimRegions 
+"""Regional mapping for monitoring sites.
+
+This module will contain functions to map monitors from monitors.py transformer output
+to specific geographic regions using reference shapefiles.
+
+Reference file location: soar_pipeline/ops/dimRegions
+"""
+
 

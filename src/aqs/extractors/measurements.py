@@ -336,3 +336,173 @@ def write_daily_for_parameter(
     atomic_write_json(audit_path, results)
 
     return results
+
+
+def fetch_qualifiers_by_state(
+    parameter_code: str, bdate: date, edate: date, state_fips: str, session=None
+):
+    """Fetch qualifier data from AQS transactionsSample/byState endpoint, yielding results per year.
+
+    Retrieves qualifier codes and descriptions for air quality measurements, which provide
+    context about data quality, validation status, and measurement conditions. Data is
+    fetched year-by-year for memory-efficient processing.
+
+    Args:
+        parameter_code: AQS parameter code (e.g., "44201" for Ozone)
+        bdate: Begin date
+        edate: End date
+        state_fips: State FIPS code as 2-digit string
+        session: Optional requests.Session for connection pooling
+
+    Yields:
+        Tuple of (year_string, DataFrame) for each year.
+        DataFrame preserves all columns from AQS API response.
+
+    API Endpoint:
+        https://aqs.epa.gov/data/api/transactionsSample/byState
+    """
+    session = session or _client.make_session()
+    for b, e in _client.build_year_chunks(bdate, edate):
+        params = {
+            "email": config.AQS_EMAIL or "",
+            "key": config.AQS_KEY or "",
+            "param": parameter_code,
+            "bdate": b,
+            "edate": e,
+            "state": state_fips,
+        }
+        url = f"https://aqs.epa.gov/data/api/transactionsSample/byState?{urlencode(params)}"
+        df = _client.fetch_df(session, url)
+        year_token = b[:4]
+        yield year_token, df
+
+
+def write_qualifiers_for_toxics(
+    bdate: date,
+    edate: date,
+    state_fips: str,
+    session=None,
+) -> dict:
+    """Fetch and write qualifier data for all toxics parameters, organized by year.
+
+    Extracts qualifier codes from AQS API for toxics pollutants and writes to CSV files
+    organized by year. Qualifiers provide data quality context for TRV risk assessments.
+    API data is preserved exactly as returned without modification.
+
+    Args:
+        bdate: Begin date
+        edate: End date
+        state_fips: State FIPS code
+        session: Optional requests.Session for connection pooling
+
+    Returns:
+        Dictionary with extraction results including row counts per year and status.
+        Written to logs/qualifiers_toxics_{timestamp}.json
+
+    Output Files:
+        raw/aqs/qualifiers/aqs_qualifiers_toxics_{year}.csv
+        All toxics parameters consolidated into single files per year.
+    """
+    session = session or _client.make_session()
+
+    # Get toxics parameters from dimPollutant.csv
+    from utils import get_toxics_parameters
+
+    toxics_params = get_toxics_parameters()
+    
+    results = {
+        "data_type": "qualifiers_toxics",
+        "state_fips": state_fips,
+        "years": {},
+        "parameters": {
+            "total": len(toxics_params),
+            "processed": 0,
+            "successful": 0,
+            "failed": 0,
+            "details": {}
+        },
+        "status": "ok",
+    }
+    logs_dir = Path(config.ROOT) / "raw" / "aqs" / "logs"
+    logs_dir.mkdir(parents=True, exist_ok=True)
+
+    try:
+        # Create output directory
+        config.RAW_QUALIFIERS.mkdir(parents=True, exist_ok=True)
+
+        # Track all data by year
+        yearly_data = {}
+        
+        # Fetch qualifiers for each toxics parameter
+        for param_code, param_name in toxics_params.items():
+            results["parameters"]["processed"] += 1
+            print(f"🧪 Processing parameter {param_code} ({param_name}) - {results['parameters']['processed']}/{len(toxics_params)}")
+            
+            param_results = {
+                "name": param_name,
+                "status": "processing",
+                "years": {},
+                "error": None
+            }
+            
+            try:
+                param_data_found = False
+                for year_token, df in fetch_qualifiers_by_state(
+                    param_code, bdate, edate, state_fips, session=session
+                ):
+                    if df is not None and not df.empty:
+                        param_data_found = True
+                        if year_token not in yearly_data:
+                            yearly_data[year_token] = []
+                        yearly_data[year_token].append(df)
+                        
+                        if year_token not in param_results["years"]:
+                            param_results["years"][year_token] = 0
+                        param_results["years"][year_token] += len(df)
+                        print(f"   📅 {year_token}: {len(df)} records")
+                
+                if param_data_found:
+                    param_results["status"] = "success"
+                    results["parameters"]["successful"] += 1
+                    print(f"   ✅ Success")
+                else:
+                    param_results["status"] = "no_data"
+                    results["parameters"]["successful"] += 1  # No data is still successful
+                    print(f"   ⚠️  No data found")
+                
+            except Exception as exc:
+                param_results["status"] = "failed"
+                param_results["error"] = str(exc)
+                results["parameters"]["failed"] += 1
+                print(f"   ❌ Error: {str(exc)}")
+                # Continue processing other parameters
+            
+            results["parameters"]["details"][param_code] = param_results
+        
+        # Write consolidated files per year
+        print(f"\n📁 Writing consolidated qualifier files...")
+        for year_token, dfs in yearly_data.items():
+            out_path = config.RAW_QUALIFIERS / f"aqs_qualifiers_toxics_{year_token}.csv"
+            if not dfs:
+                results["years"][year_token] = {"rows": 0, "path": str(out_path)}
+                continue
+                
+            # Concatenate all parameter data for this year
+            combined_df = pd.concat(dfs, ignore_index=True)
+            append_csv(combined_df, out_path)
+            results["years"][year_token] = {"rows": len(combined_df), "path": str(out_path)}
+            print(f"   📅 {year_token}: {len(combined_df)} records -> {out_path.name}")
+            
+    except Exception as exc:
+        results["status"] = "failed"
+        results["error"] = str(exc)
+
+    # Write audit log with extraction results
+    from loaders.filesystem import atomic_write_json
+
+    ts = __import__("datetime").datetime.utcnow().strftime("%Y-%m-%dT%H-%M-%SZ")
+    audit_name = f"qualifiers_toxics_{ts}.json"
+    audit_path = logs_dir / audit_name
+    atomic_write_json(audit_path, results)
+
+    return results

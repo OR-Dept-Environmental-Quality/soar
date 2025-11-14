@@ -40,6 +40,7 @@ RAW = ROOT / "raw" / "aqs" / "monitors"  # Monitors path
 RAW_SAMPLE = ROOT / "raw" / "aqs" / "sample"  # Sample data (hourly/sub-daily)
 RAW_DAILY = ROOT / "raw" / "aqs" / "daily"  # Daily summaries
 RAW_ANNUAL = ROOT / "raw" / "aqs" / "annual"  # Annual aggregates
+RAW_QUALIFIERS = ROOT / "raw" / "aqs" / "qualifiers"  # Qualifier data for toxics
 TRANS = ROOT / "transform" / "aqs" / "monitors"  # Transformed/curated layer
 STAGED = ROOT / "staged" / "aqs" / "monitors"  # Staged layer for analytics
 CTL_DIR = ROOT / "raw" / "aqs" / "_ctl"  # Control files (circuit breaker health, etc.)

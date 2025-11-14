@@ -12,6 +12,7 @@ import sys
 from pathlib import Path
 from typing import Dict, List
 
+import numpy as np
 import pandas as pd
 
 # Add src directory to Python path
@@ -44,7 +45,13 @@ def get_aqi_category(aqi_value: float, categories_df: pd.DataFrame) -> str:
         if row['low_aqi'] <= aqi_value <= row['high_aqi']:
             return row['aqi_category']
     
-    return None  # Should not happen with valid AQI values
+    # If no category found (AQI > highest range), assign highest category
+    # This handles cases where AQI exceeds the maximum defined range (e.g., >999)
+    if not categories_df.empty:
+        highest_category = categories_df.loc[categories_df['low_aqi'].idxmax(), 'aqi_category']
+        return highest_category
+    
+    return None  # Should not happen with valid categories
 
 
 def consolidate_aqi_daily_for_year(year: str, transform_dir: Path, categories_df: pd.DataFrame) -> pd.DataFrame:
@@ -112,7 +119,7 @@ def consolidate_aqi_daily_for_year(year: str, transform_dir: Path, categories_df
     # For ozone, just take all (should be unique per site/date anyway)
     ozone_df = df[df['pollutant'] == 'ozone'].copy()
 
-    # Now merge ozone and pm25 data
+    # Merge ozone and PM25 data into consolidated records
     # Start with all unique site_code + date_local combinations
     all_sites_dates = pd.concat([
         df[['site_code', 'date_local', 'event_type']].drop_duplicates()
@@ -144,10 +151,11 @@ def consolidate_aqi_daily_for_year(year: str, transform_dir: Path, categories_df
         )
         result = result.merge(pm25_cols, on=['site_code', 'date_local'], how='left')
 
-    # Calculate overall AQI as max of ozone_aqi and pm25_aqi
-    result['aqi'] = result[['ozone_aqi', 'pm25_aqi']].max(axis=1)
+    # Calculate overall AQI as maximum of pollutant-specific AQI values
+    # Use np.nanmax to handle cases where only one pollutant is present
+    result['aqi'] = result[['ozone_aqi', 'pm25_aqi']].apply(lambda row: np.nanmax(row.values), axis=1)
 
-    # Add AQI category based on the overall AQI value
+    # Assign AQI category based on the overall AQI value
     result['aqi_category'] = result['aqi'].apply(lambda x: get_aqi_category(x, categories_df))
 
     # Select final columns in the required order
@@ -174,7 +182,7 @@ def consolidate_aqi_daily_for_year(year: str, transform_dir: Path, categories_df
 
     result = result[final_columns]
 
-    # Remove rows where aqi is NaN (no valid pollutants)
+    # Filter out records without valid AQI values
     result = result.dropna(subset=['aqi'])
 
     # Ensure uniqueness by site_code and date_local
@@ -203,8 +211,7 @@ def run_consolidation():
         return
 
     # Output directory (staged AQI data)
-    # Note: This is outside the repo in the data lake
-    staged_dir = Path(r"C:\Users\abiberi\Oregon\DEQ - Air Data Team - DataRepo\soar\staged\aqi")
+    staged_dir = config.ROOT / "staged" / "fct_aqi_daily"
     staged_dir.mkdir(parents=True, exist_ok=True)
 
     # Process each year in the date range

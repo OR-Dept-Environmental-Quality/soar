@@ -63,3 +63,36 @@ def get_parameter_group(
     """
     mapping = load_parameter_groups(csv_path)
     return mapping.get(str(parameter_code), "unknown")
+
+
+def get_toxics_parameters(csv_path: str = "ops/dimPollutant.csv") -> Dict[str, str]:
+    """Get all parameters where group_store equals 'toxics'.
+
+    Loads the pollutant dimension table and returns a dictionary of parameter codes
+    and names for all toxics pollutants. Used to identify which parameters need
+    qualifier data extraction.
+
+    Args:
+        csv_path: Path to dimPollutant.csv file (default: "ops/dimPollutant.csv")
+
+    Returns:
+        Dictionary mapping parameter code to parameter name for toxics pollutants.
+        Example: {"45201": "Benzene", "43301": "1,3-Butadiene", ...}
+
+    Note:
+        Only includes parameters where group_store = "toxics" and both
+        aqs_parameter and parameter_name columns are populated.
+    """
+    df = pd.read_csv(csv_path, dtype=str)
+
+    # Filter to toxics parameters with valid codes and names
+    toxics_df = df[
+        (df["group_store"] == "toxics") &
+        df["aqs_parameter"].notna() &
+        df["analyte_name_deq"].notna()
+    ]
+
+    # Create mapping: aqs_parameter (code) -> analyte_name_deq
+    mapping = toxics_df.set_index("aqs_parameter")["analyte_name_deq"].to_dict()
+
+    return mapping

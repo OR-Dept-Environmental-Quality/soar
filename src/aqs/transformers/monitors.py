@@ -76,7 +76,7 @@ def transform_monitors(raw_monitors: pd.DataFrame) -> pd.DataFrame:
     # Select the available fields
     transformed = raw_monitors[available_fields].copy()
 
-    # Remove duplicates by site_code, keeping the first occurrence
+    # Deduplicate by site_code, keeping the first occurrence
     if "site_code" in transformed.columns:
         original_count = len(transformed)
         transformed = transformed.drop_duplicates(subset=["site_code"])

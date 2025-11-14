@@ -166,15 +166,12 @@ def transform_toxics_trv(df: pd.DataFrame, dim_pollutant_path: str) -> pd.DataFr
     # Clean up temporary columns
     df = df.drop(columns=["state_code_num", "county_code_num", "site_number_num"])
 
-    # Add converted concentration field (equal to converted value)
+    # Create concentration field in ug/m3 units
     df["ugm3_converted"] = df["sample_measurement_ug_m3"]
 
     # Select and order output columns (include converted value for QA)
     output_columns = [
         "site_code",
-        "latitude",
-        "longitude",
-        "county",
         "parameter_code",
         "poc",
         "parameter",

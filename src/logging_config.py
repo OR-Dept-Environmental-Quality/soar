@@ -76,7 +76,7 @@ def setup_logging(
         json_format: Use JSON formatting for structured logging
         verbose: Enable verbose output (DEBUG level)
     """
-    # Update configuration based on parameters
+    # Apply configuration parameters to logging config
     config = LOGGING_CONFIG.copy()
 
     # Set log level
@@ -86,7 +86,7 @@ def setup_logging(
     numeric_level = getattr(logging, level.upper(), logging.INFO)
     config["root"]["level"] = level
 
-    # Update console formatter
+    # Set console formatter
     if json_format:
         config["handlers"]["console"]["formatter"] = "json"
     else:
@@ -99,9 +99,9 @@ def setup_logging(
         log_path = Path(log_file)
         log_path.parent.mkdir(parents=True, exist_ok=True)
     else:
-        # Remove file handler if no log file specified
+        # Disable file handler if no log file specified
         config["handlers"].pop("file", None)
-        # Remove file handler from loggers
+        # Remove file handler from logger configurations
         for logger_config in config["loggers"].values():
             if "file" in logger_config["handlers"]:
                 logger_config["handlers"].remove("file")

@@ -184,15 +184,12 @@ def transform_toxics_annual_trv(
     # Clean up temporary columns
     df = df.drop(columns=["state_code_num", "county_code_num", "site_number_num"])
 
-    # Add converted concentration field (equal to arithmetic mean converted value)
+    # Create concentration field in ug/m3 units
     df["ugm3_converted"] = df["arithmetic_mean_ug_m3"]
 
     # Select and order output columns
     output_columns = [
         "site_code",
-        "latitude",
-        "longitude",
-        "county",
         "parameter",
         "sample_duration",
         "parameter_code",
