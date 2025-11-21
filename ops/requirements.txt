@@ -7,4 +7,7 @@ ruff
 black
 pytest
 pandera
-
+geopandas
+pyogrio
+gdal
+fiona
