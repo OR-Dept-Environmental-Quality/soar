@@ -232,13 +232,13 @@ def write_annual_for_parameter(
 
     try:
         # Create output directory (files go directly here, no year subdirectories)
-        config.RAW_ANNUAL.mkdir(parents=True, exist_ok=True)
+        config.RAW_AQS_ANNUAL.mkdir(parents=True, exist_ok=True)
 
         # Fetch and write data year by year
         for year_token, df in fetch_annual_by_state(
             parameter_code, bdate, edate, state_fips, session=session
         ):
-            out_path = config.RAW_ANNUAL / f"aqs_annual_{group_store}_{year_token}.csv"
+            out_path = config.RAW_AQS_ANNUAL / f"aqs_annual_{group_store}_{year_token}.csv"
             if df is None or df.empty:
                 results["years"][year_token] = {"rows": 0, "path": str(out_path)}
                 continue
@@ -313,12 +313,12 @@ def write_daily_for_parameter(
 
     try:
         # Create output directory (files go directly here, no year subdirectories)
-        config.RAW_DAILY.mkdir(parents=True, exist_ok=True)
+        config.RAW_AQS_DAILY.mkdir(parents=True, exist_ok=True)
 
         for year_token, df in fetch_daily_by_state(
             parameter_code, bdate, edate, state_fips, session=session
         ):
-            out_path = config.RAW_DAILY / f"aqs_daily_{group_store}_{year_token}.csv"
+            out_path = config.RAW_AQS_DAILY / f"aqs_daily_{group_store}_{year_token}.csv"
             if df is None or df.empty:
                 results["years"][year_token] = {"rows": 0, "path": str(out_path)}
                 continue
@@ -428,7 +428,7 @@ def write_qualifiers_for_toxics(
 
     try:
         # Create output directory
-        config.RAW_QUALIFIERS.mkdir(parents=True, exist_ok=True)
+        config.RAW_AQS_QUALIFIERS.mkdir(parents=True, exist_ok=True)
 
         # Track all data by year
         yearly_data = {}
@@ -482,7 +482,7 @@ def write_qualifiers_for_toxics(
         # Write consolidated files per year
         print(f"\n📁 Writing consolidated qualifier files...")
         for year_token, dfs in yearly_data.items():
-            out_path = config.RAW_QUALIFIERS / f"aqs_qualifiers_toxics_{year_token}.csv"
+            out_path = config.RAW_AQS_QUALIFIERS / f"aqs_qualifiers_toxics_{year_token}.csv"
             if not dfs:
                 results["years"][year_token] = {"rows": 0, "path": str(out_path)}
                 continue

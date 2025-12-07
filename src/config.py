@@ -19,6 +19,11 @@ load_dotenv()
 AQS_EMAIL = os.getenv("AQS_EMAIL")
 AQS_KEY = os.getenv("AQS_KEY")
 
+# Envista API credentials
+ENVISTA_USER = os.getenv("ENVISTA_USER")
+ENVISTA_KEY = os.getenv("ENVISTA_KEY")
+ENVISTA_URL = os.getenv("ENVISTA_URL")
+
 # State FIPS code (zero-padded to 2 digits)
 STATE = (os.getenv("STATE_CODE") or "").zfill(2)
 
@@ -36,11 +41,16 @@ END_YEAR = EDATE.year
 # Data lake root and layer paths
 # All output written to DATAREPO_ROOT data lake, organized by layer and service
 ROOT = Path(os.environ["DATAREPO_ROOT"]).expanduser()
-RAW = ROOT / "raw" / "aqs" / "monitors"  # Monitors path
-RAW_SAMPLE = ROOT / "raw" / "aqs" / "sample"  # Sample data (hourly/sub-daily)
-RAW_DAILY = ROOT / "raw" / "aqs" / "daily"  # Daily summaries
-RAW_ANNUAL = ROOT / "raw" / "aqs" / "annual"  # Annual aggregates
-RAW_QUALIFIERS = ROOT / "raw" / "aqs" / "qualifiers"  # Qualifier data for toxics
+
+RAW_AQS_MONITORS = ROOT / "raw" / "aqs" / "monitors"  # Monitors path
+RAW_AQS_SAMPLE = ROOT / "raw" / "aqs" / "sample"  # Sample data (hourly/sub-daily)
+RAW_AQS_DAILY = ROOT / "raw" / "aqs" / "daily"  # Daily summaries
+RAW_AQS_ANNUAL = ROOT / "raw" / "aqs" / "annual"  # Annual aggregates
+RAW_AQS_QUALIFIERS = ROOT / "raw" / "aqs" / "qualifiers"  # Qualifier data for toxics
+RAW_ENV_MONITORS = ROOT / "raw" / "envista" / "monitors"  # Envista monitor metadata
+RAW_ENV_SAMPLE = ROOT / "raw" / "envista" / "sample"  # Envista sample data
+RAW_ENV_DAILY = ROOT / "raw" / "envista" / "daily"
+
 TRANS = ROOT / "transform" / "aqs" / "monitors"  # Transformed/curated layer
 STAGED = ROOT / "staged" / "aqs" / "monitors"  # Staged layer for analytics
 CTL_DIR = ROOT / "raw" / "aqs" / "_ctl"  # Control files (circuit breaker health, etc.)
