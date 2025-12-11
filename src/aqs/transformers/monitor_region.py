@@ -35,18 +35,14 @@ def add_monitor_regions(root_path: Path, raw_monitors: pd.DataFrame) -> pd.DataF
     gdf_monitors = gpd.GeoDataFrame(
         raw_monitors,
         geometry=gpd.points_from_xy(raw_monitors.longitude, raw_monitors.latitude),
-        crs="EPSG:4326",  # WGS 84
+        crs=DEFAULT_CRS,  # WGS 84
     )
 
     # Read regions shapefile
     print(f"Reading regions from {regions_shp_path}")
     gdf_regions = gpd.read_file(regions_shp_path)
-
-    # Ensure both GeoDataFrames use WGS 84
-    if gdf_monitors.crs is None or gdf_monitors.crs != DEFAULT_CRS:
-        gdf_monitors.set_crs(DEFAULT_CRS, inplace=True)
-        print(f"Set monitor CRS to {DEFAULT_CRS}")
-    
+ 
+   
     if gdf_regions.crs is None:
         gdf_regions.set_crs(DEFAULT_CRS, inplace=True)
         print(f"Set regions CRS to {DEFAULT_CRS}")
