@@ -64,7 +64,7 @@ def add_monitor_regions(root_path: Path, raw_monitors: pd.DataFrame) -> pd.DataF
     # Clean up the result
     result = (
         result
-        .drop(columns=["geometry", "index_right"])  # Remove spatial columns
+        .drop(columns=["geometry", "index_right"], errors="ignore")  # Remove spatial columns
         .fillna({"Region": "Unknown"})  # Fill missing regions
     )
 
