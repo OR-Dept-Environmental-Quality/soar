@@ -47,6 +47,7 @@ CTL_DIR = ROOT / "raw" / "aqs" / "_ctl"  # Control files (circuit breaker health
 
 # Parameter definitions
 PARAMS_CSV = Path("ops/parameters.csv")
+REGIONS_SHP = Path("ops/dimRegions.shp")
 
 # Sample extraction mode: "by_state" (default) or "by_site"
 # by_state: Fetch all sites at once, memory-efficient streaming

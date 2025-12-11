@@ -19,6 +19,7 @@ sys.path.insert(0, str(ROOT / "src"))
 
 import config
 from aqs.transformers.monitors import transform_monitors
+from aqs.transformers.monitor_region import add_monitor_regions
 from loaders.filesystem import write_csv
 
 
@@ -53,6 +54,9 @@ def run():
     # Transform monitors
     print("\n🔄 Transforming monitor data...")
     transformed_df = transform_monitors(raw_monitors_df)
+
+    print("\n🔄 Adding region data...")
+    transformed_df = add_monitor_regions(ROOT, transformed_df)
 
     if transformed_df.empty:
         print("❌ Transformation resulted in empty dataset")
