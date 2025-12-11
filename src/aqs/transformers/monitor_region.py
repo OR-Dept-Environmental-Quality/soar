@@ -16,7 +16,28 @@ import config
 DEFAULT_CRS = "EPSG:4326"
 
 def add_monitor_regions(root_path: Path, raw_monitors: pd.DataFrame) -> pd.DataFrame:
+    """
+    Enrich monitor data with region information via spatial join.
 
+    Parameters
+    ----------
+    root_path : Path
+        Root directory containing the regions shapefile at 'ops/dimRegions.shp'.
+    raw_monitors : pd.DataFrame
+        DataFrame containing monitor locations with 'latitude' and 'longitude' columns.
+
+    Returns
+    -------
+    pd.DataFrame
+        DataFrame with region information added in a 'Region' column.
+
+    Raises
+    ------
+    FileNotFoundError
+        If the regions shapefile does not exist.
+    ValueError
+        If required columns are missing from raw_monitors.
+    """
     print("Starting monitor region transformation")
 
     # Path to regions shapefile
