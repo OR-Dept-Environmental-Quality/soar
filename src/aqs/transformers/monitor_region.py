@@ -10,6 +10,8 @@ from pathlib import Path
 import geopandas as gpd
 import pandas as pd
 
+import config
+
 # Default CRS for all geospatial operations (WGS 84)
 DEFAULT_CRS = "EPSG:4326"
 
@@ -18,7 +20,7 @@ def add_monitor_regions(root_path: Path, raw_monitors: pd.DataFrame) -> pd.DataF
     print("Starting monitor region transformation")
 
     # Path to regions shapefile
-    regions_shp_path = root_path / "ops" / "dimRegions.shp"
+    regions_shp_path = config.REGIONS_SHP
 
     # Input validation
     if not regions_shp_path.exists():
