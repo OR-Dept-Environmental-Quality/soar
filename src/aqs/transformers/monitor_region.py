@@ -32,7 +32,7 @@ def add_monitor_regions(root_path: Path, raw_monitors: pd.DataFrame) -> pd.DataF
 
     # Create GeoDataFrame from monitor coordinates
 
-    graw_monitors_monitors = gpd.GeoDataFrame(
+    gdf_monitors = gpd.GeoDataFrame(
         raw_monitors,
         geometry=gpd.points_from_xy(raw_monitors.longitude, raw_monitors.latitude),
         crs="EPSG:4326",  # WGS 84
@@ -40,25 +40,25 @@ def add_monitor_regions(root_path: Path, raw_monitors: pd.DataFrame) -> pd.DataF
 
     # Read regions shapefile
     print(f"Reading regions from {regions_shp_path}")
-    graw_monitors_regions = gpd.read_file(regions_shp_path)
+    gdf_regions = gpd.read_file(regions_shp_path)
 
     # Ensure both GeoDataFrames use WGS 84
-    if graw_monitors_monitors.crs is None or graw_monitors_monitors.crs != DEFAULT_CRS:
-        graw_monitors_monitors.set_crs(DEFAULT_CRS, inplace=True)
+    if gdf_monitors.crs is None or gdf_monitors.crs != DEFAULT_CRS:
+        gdf_monitors.set_crs(DEFAULT_CRS, inplace=True)
         print(f"Set monitor CRS to {DEFAULT_CRS}")
     
-    if graw_monitors_regions.crs is None:
-        graw_monitors_regions.set_crs(DEFAULT_CRS, inplace=True)
+    if gdf_regions.crs is None:
+        gdf_regions.set_crs(DEFAULT_CRS, inplace=True)
         print(f"Set regions CRS to {DEFAULT_CRS}")
-    elif graw_monitors_regions.crs != DEFAULT_CRS:
-        print(f"Reprojecting regions from {graw_monitors_regions.crs} to {DEFAULT_CRS}")
-        graw_monitors_regions = graw_monitors_regions.to_crs(DEFAULT_CRS)
+    elif gdf_regions.crs != DEFAULT_CRS:
+        print(f"Reprojecting regions from {gdf_regions.crs} to {DEFAULT_CRS}")
+        gdf_regions = gdf_regions.to_crs(DEFAULT_CRS)
 
     # Perform spatial join
     print("Performing spatial join")
     result = gpd.sjoin(
-        graw_monitors_monitors,
-        graw_monitors_regions[["geometry", "Region"]],  # Only keep needed columns
+        gdf_monitors,
+        gdf_regions[["geometry", "Region"]],  # Only keep needed columns
         how="left",
         predicate="within",
     )
