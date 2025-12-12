@@ -8,7 +8,7 @@ import pandas as pd
 import requests
 from requests.auth import HTTPBasicAuth
 
-from config import ENVISTA_KEY, ENVISTA_URL, ENVISTA_USER
+from config import ENV_KEY, ENV_URL, ENV_USER
 
 logger = logging.getLogger(__name__)
 
@@ -25,15 +25,15 @@ def get_envista_stations() -> pd.DataFrame:
     Raises:
         requests.RequestException: If HTTP request fails
     """
-    if not ENVISTA_URL or not ENVISTA_USER or not ENVISTA_KEY:
+    if not ENV_URL or not ENV_USER or not ENV_KEY:
         raise ValueError("Missing Envista credentials in configuration")
 
-    query = f"{ENVISTA_URL}v1/envista/stations"
+    query = f"{ENV_URL}v1/envista/stations"
     
     try:
         response = requests.get(
             query,
-            auth=HTTPBasicAuth(ENVISTA_USER, ENVISTA_KEY),
+            auth=HTTPBasicAuth(ENV_USER, ENV_KEY),
             timeout=120
         )
         response.raise_for_status()
