@@ -6,8 +6,9 @@ and processes measurement data using the Envista API.
 
 from __future__ import annotations
 
-import logging
+import os
 import sys
+from datetime import datetime
 from pathlib import Path
 
 import pandas as pd
@@ -17,10 +18,16 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
 
 # Import after path is set
 import config
+
+from logging_config import (
+     setup_logging, get_logger, log_pipeline_start, 
+     log_error_with_context, log_data_processing, log_pipeline_end)
+from loaders.filesystem import write_csv
 from envista.monitors import build_envista_metadata, get_envista_stations
 
-logger = logging.getLogger(__name__)
-
+TEST_MODE = os.getenv("ENV_TEST_MODE", "").strip().lower() in {"1", "true", "yes", "on"}
+ENV_MONITOR_DIR = config.RAW_ENV_MONITORS
+ENV_SAMPLE_DIR = config.RAW_ENV_SAMPLE
 
 def extract_envista_station_data() -> pd.DataFrame | None:
     """Extract station data from Envista API.
@@ -31,8 +38,12 @@ def extract_envista_station_data() -> pd.DataFrame | None:
     Returns:
         DataFrame with station and monitor metadata, or None if extraction fails.
     """
-    if not config.ENVISTA_URL or not config.ENVISTA_USER or not config.ENVISTA_KEY:
-        logger.error("Missing Envista credentials in configuration")
+    logger = get_logger(__name__)
+    logger.info("Starting Envista station data extraction")
+    logger.info(f"Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+
+    if not config.ENV_URL or not config.ENV_USER or not config.ENV_KEY:
+        logger.info("Missing Envista credentials in configuration")
         return None
 
     try:
@@ -64,12 +75,12 @@ def extract_envista_station_data() -> pd.DataFrame | None:
 
 def main() -> None:
     """Main entry point for Envista service pipeline."""
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-    )
-    
-    logger.info("Starting Envista service pipeline")
+    logger = get_logger(__name__)
+
+    log_level = "DEBUG" if TEST_MODE else "INFO"
+    log_dir = ENV_MONITOR_DIR.parent
+    setup_logging(level=log_level, log_file=str(log_dir / "envista_service.log"))
+    log_pipeline_start("Envista Service Pipeline") 
     
     # Extract station data
     monitor_metadata = extract_envista_station_data()
@@ -82,15 +93,15 @@ def main() -> None:
         # Export to CSV
         try:
             config.ensure_dirs(config.RAW_ENV_MONITORS)
-            csv_path = config.RAW_ENV_MONITORS / "envista_stations_metadata.csv"
-            monitor_metadata.to_csv(csv_path, index=False)
-            logger.info(f"Exported station metadata to {csv_path}")
+            write_csv(monitor_metadata, ENV_MONITOR_DIR / "envista_stations_monitors.csv")
+            logger.info(f"Exported station metadata to {ENV_MONITOR_DIR}")
         except Exception as e:
-            logger.error(f"Failed to export CSV: {e}", exc_info=True)
+            log_error_with_context(e, "Failed to export Envista station metadata to CSV")
             sys.exit(1)
     else:
         logger.error("Failed to extract Envista station data")
         sys.exit(1)
+    log_pipeline_end("Envista Service Pipeline", success=True)
 
 
 if __name__ == "__main__":
