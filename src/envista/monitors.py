@@ -1,29 +1,81 @@
 from __future__ import annotations
-
-import logging
-from datetime import datetime, timedelta
-from typing import Any
+from datetime import datetime
+import threading
 
 import pandas as pd
 import requests
-from requests.auth import HTTPBasicAuth
 
 from config import ENV_KEY, ENV_URL, ENV_USER
+from logging_config import get_logger
+from . import _env_client
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
+
+# Thread-local storage for session management
+_session_local = threading.local()
+
+
+def _get_session() -> requests.Session:
+    """Get or create a thread-local Envista API session."""
+    session = getattr(_session_local, "session", None)
+    if session is None:
+        session = _env_client.make_session()
+        _session_local.session = session
+    return session
+
+def extract_envista_station_data() -> pd.DataFrame | None:
+    """Extract station data from Envista API.
+
+    Retrieves all stations and builds a comprehensive metadata table
+    with monitor information for each station-monitor combination.
+
+    Returns:
+        DataFrame with station and monitor metadata, or None if extraction fails.
+    """
+    logger = get_logger(__name__)
+    logger.info("Starting Envista station data extraction")
+    logger.info(f"Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+
+    if not ENV_URL or not ENV_USER or not ENV_KEY:
+        logger.info("Missing Envista credentials in configuration")
+        return None
+
+    try:
+        logger.info("Fetching Envista station data...")
+        stations_df = get_envista_stations()
+        
+        if stations_df.empty:
+            logger.warning("No stations retrieved from Envista API")
+            return None
+        
+        logger.info(f"Retrieved {len(stations_df)} stations from Envista")
+        
+        # Build metadata table with monitor information
+        logger.info("Building Envista monitor metadata table...")
+        monitor_metadata = build_envista_metadata(stations_df)
+        
+        if monitor_metadata.empty:
+            logger.warning("No monitor metadata generated")
+            return None
+        
+        logger.info(f"Generated metadata for {len(monitor_metadata)} station-monitor combinations")
+        
+        return monitor_metadata
+    
+    except Exception as e:
+        logger.error(f"Error extracting Envista station data: {e}", exc_info=True)
+        return None
 
 def get_envista_stations() -> pd.DataFrame:
     """Retrieve all stations from the Envista API.
 
     Fetches station metadata including monitors, regions, and location data
-    from the Envista API using configured credentials.
+    from the Envista API using configured credentials. Uses centralized
+    _env_client for rate limiting, retries, and circuit breaker.
 
     Returns:
         DataFrame with station information including monitors and region data.
         Returns empty DataFrame if request fails.
-
-    Raises:
-        requests.RequestException: If HTTP request fails
     """
     if not ENV_URL or not ENV_USER or not ENV_KEY:
         raise ValueError("Missing Envista credentials in configuration")
@@ -31,13 +83,12 @@ def get_envista_stations() -> pd.DataFrame:
     query = f"{ENV_URL}v1/envista/stations"
     
     try:
-        response = requests.get(
-            query,
-            auth=HTTPBasicAuth(ENV_USER, ENV_KEY),
-            timeout=120
-        )
-        response.raise_for_status()
-        stations = response.json()
+        session = _get_session()
+        stations = _env_client.fetch_json(session, query)
+        
+        if not stations:
+            logger.warning("No stations retrieved from Envista API")
+            return pd.DataFrame()
         
         # Convert to DataFrame
         stations_df = pd.json_normalize(stations)
@@ -46,9 +97,10 @@ def get_envista_stations() -> pd.DataFrame:
         if 'address' in stations_df.columns:
             stations_df = stations_df.rename(columns={'address': 'census_classifier'})
         
+        logger.debug(f"Retrieved {len(stations_df)} stations from Envista API")
         return stations_df
     
-    except requests.RequestException as e:
+    except Exception as e:
         logger.error(f"Failed to retrieve Envista stations: {e}")
         return pd.DataFrame()
 

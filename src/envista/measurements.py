@@ -8,232 +8,146 @@ processing by downstream pipelines.
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timedelta
+import threading
+from datetime import timedelta
 from typing import Any
 
 import pandas as pd
 import requests
-from requests.auth import HTTPBasicAuth
 
 from config import ENV_KEY, ENV_URL, ENV_USER
+from logging_config import get_logger
+from . import _env_client
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
-def get_envista_data_by_site(
-    site_index: int,
-    site_pollutant_meta: dict[str, Any]
-) -> pd.DataFrame | None:
+# Thread-local storage for session management
+_session_local = threading.local()
+
+
+def _get_session() -> requests.Session:
+    """Get or create a thread-local Envista API session."""
+    session = getattr(_session_local, "session", None)
+    if session is None:
+        session = _env_client.make_session()
+        _session_local.session = session
+    return session
+
+def get_envista_sample(station_id: str, channel_id: str, from_date: str, to_date: str) -> pd.DataFrame | None:
     """Retrieve Envista measurement data for a specific site and channel.
 
     Fetches hourly measurement data from a specific station's channel over
-    a specified date range.
+    a specified date range. Uses centralized _env_client for rate limiting,
+    retries, and circuit breaker.
 
     Args:
-        site_index: Index of the site in the metadata
-        site_pollutant_meta: Dictionary with 'meta' key containing site metadata
+        station_id: Envista station ID
+        channel_id: Envista channel ID
+        from_date: Start date in ISO format (e.g., '2022-01-01')
+        to_date: End date in ISO format (e.g., '2022-12-31')
 
     Returns:
         DataFrame with parsed measurements, or None if request fails or no data
-
-    Raises:
-        requests.RequestException: If HTTP request fails
     """
     if not ENV_URL or not ENV_USER or not ENV_KEY:
         raise ValueError("Missing Envista credentials in configuration")
 
-    meta = site_pollutant_meta.get('meta', {})
     time_base = 60
-    
-    channel_id = meta.get('channel_id', [None])[site_index] if isinstance(meta.get('channel_id'), list) else meta.get('channel_id')
-    station_id = meta.get('station_id', [None])[site_index] if isinstance(meta.get('station_id'), list) else meta.get('station_id')
-    from_date = meta.get('from_date', [None])[site_index] if isinstance(meta.get('from_date'), list) else meta.get('from_date')
-    to_date = meta.get('to_date', [None])[site_index] if isinstance(meta.get('to_date'), list) else meta.get('to_date')
-    
-    # Convert to date strings
-    if isinstance(from_date, datetime):
-        start_date = from_date.strftime('%Y-%m-%d')
-    else:
-        start_date = str(from_date)
-    
-    if isinstance(to_date, datetime):
-        end_date = to_date.strftime('%Y-%m-%d')
-    else:
-        end_date = str(to_date)
     
     query = (
         f"{ENV_URL}v1/envista/stations/{station_id}/data/{channel_id}"
-        f"?from={start_date}&to={end_date}&timebase={time_base}"
+        f"?from={from_date}&to={to_date}&timebase={time_base}&timeBeginning=True"
     )
     
-    logger.info(f"Querying Envista: {query}")
+    logger.debug(f"Fetching Envista data: station={station_id}, channel={channel_id}, "
+                 f"from={from_date}, to={to_date}")
     
     try:
-        response = requests.get(
-            query,
-            auth=HTTPBasicAuth(ENV_USER, ENV_KEY),
-            timeout=120
-        )
+        session = _get_session()
+        response = _env_client.fetch_json(session, query)
         
-        if response.status_code in (200, 204):
-            if response.status_code == 204 or not response.text:
-                logger.warning(f"No content returned (status {response.status_code})")
-                return None
+        if response is None:
+            logger.warning(f"No content returned for station={station_id}, channel={channel_id}")
+            return None
+        
+        # Convert response to DataFrame
+        if isinstance(response, list):
+            env_sample_df = pd.DataFrame(response)
+        elif isinstance(response, dict):
+            env_sample_df = pd.json_normalize(response)
         else:
-            logger.warning(f"Request failed with status {response.status_code}")
+            logger.warning(f"Unexpected response type: {type(response)}")
             return None
         
-        envista_raw = parse_envista_api_response(response.json())
+        if env_sample_df is None or env_sample_df.empty:
+            logger.debug(f"Empty data for station={station_id}, channel={channel_id}")
+            return None
+
+        # Fully unnest the DataFrame to handle nested structures
+        env_sample_df = _fully_unnest_dataframe(env_sample_df)
         
-        if envista_raw is None or envista_raw.empty:
-            logger.warning("Empty Envista response received")
+        # Validate: Skip if all values are NA for any column
+        all_na_columns = [col for col in env_sample_df.columns if env_sample_df[col].isna().all()]
+        if all_na_columns:
+            logger.warning(
+                f"Skipping data for station={station_id}, channel={channel_id}: "
+                f"all-NA columns {all_na_columns}"
+            )
             return None
         
-        # Add metadata columns
-        site = meta.get('site', [None])[site_index] if isinstance(meta.get('site'), list) else meta.get('site')
-        envista_raw['site'] = site
-        envista_raw['method_code'] = meta.get('aqs_method_code', [None])[site_index] if isinstance(meta.get('aqs_method_code'), list) else meta.get('aqs_method_code')
-        envista_raw['by_date'] = meta.get('interval', [None])[site_index] if isinstance(meta.get('interval'), list) else meta.get('interval')
-        envista_raw['parameter'] = meta.get('envista_name', [None])[site_index] if isinstance(meta.get('envista_name'), list) else meta.get('envista_name')
-        envista_raw['units_of_measure'] = meta.get('units_envista', [None])[site_index] if isinstance(meta.get('units_envista'), list) else meta.get('units_envista')
-        envista_raw['latitude'] = meta.get('latitude', [None])[site_index] if isinstance(meta.get('latitude'), list) else meta.get('latitude')
-        envista_raw['longitude'] = meta.get('longitude', [None])[site_index] if isinstance(meta.get('longitude'), list) else meta.get('longitude')
-        
-        return envista_raw
+        logger.debug(f"Retrieved {len(env_sample_df)} records, shape={env_sample_df.shape}")
+        return env_sample_df
     
-    except requests.RequestException as e:
-        logger.error(f"Request failed for site {station_id}: {e}")
+    except Exception as e:
+        logger.error(f"Error retrieving Envista data for station={station_id}, "
+                     f"channel={channel_id}: {e}")
         return None
 
-
-def parse_envista_api_response(envista_response: dict[str, Any]) -> pd.DataFrame | None:
-    """Parse Envista API JSON response into a flat DataFrame.
-
-    Extracts measurement data from the nested JSON structure returned by
-    the Envista API and flattens it into a tabular format.
-
+def _fully_unnest_dataframe(df: pd.DataFrame) -> pd.DataFrame:
+    """Fully unnest a DataFrame with nested lists and dictionaries.
+    
+    Recursively expands nested structures until all columns contain
+    scalar values only.
+    
     Args:
-        envista_response: JSON response from Envista API
-
-    Returns:
-        DataFrame with columns: datetime, channel_id, value, status, valid, description
-        Returns None if response has no data
-
-    Raises:
-        KeyError: If expected response structure is missing
-    """
-    data = envista_response.get('data', {})
-    
-    if not data or not data.get('datetime') or not data.get('channels'):
-        logger.warning("No data found in Envista response")
-        return None
-    
-    # Parse channels data
-    rows = []
-    for i, dt in enumerate(data.get('datetime', [])):
-        if i < len(data.get('channels', [])):
-            channel = data['channels'][i]
-            rows.append({
-                'datetime': dt,
-                'channel_id': channel.get('id'),
-                'value': channel.get('value'),
-                'status': channel.get('status'),
-                'valid': channel.get('valid'),
-                'description': channel.get('description'),
-            })
-    
-    if not rows:
-        logger.warning("No rows parsed from Envista response")
-        return None
-    
-    df = pd.DataFrame(rows)
-    
-    # Parse datetime field - remove timezone info and convert
-    df['datetime'] = df['datetime'].str.replace('T', ' ').str.replace(r'-0[78]:00', '', regex=True)
-    df['datetime'] = pd.to_datetime(df['datetime'], format='%Y-%m-%d %H:%M:%S', utc=True)
-    
-    # Convert value to numeric
-    df['value'] = pd.to_numeric(df['value'], errors='coerce')
-    
-    return df
-
-
-def standardize_envista_data(
-    envista_data: pd.DataFrame,
-    qualifier_codes: pd.DataFrame | None = None
-) -> pd.DataFrame:
-    """Standardize Envista measurement data to consistent format.
-
-    Applies time adjustments based on resolution, renames columns, adds
-    metadata fields, and maps qualifier codes to standard codes.
-
-    Args:
-        envista_data: DataFrame from get_envista_data_by_site()
-        qualifier_codes: DataFrame with columns 'envista_qualifier_id' and 'simple_qualifier'.
-                        If None, qualifiers are not mapped.
-
-    Returns:
-        Standardized DataFrame ready for loading to staging layer
-    """
-    df = envista_data.copy()
-    
-    # Apply time offset adjustments based on resolution
-    if 'by_date' in df.columns:
-        offsets = {
-            'five_min': timedelta(minutes=5),
-            'hour': timedelta(hours=1),
-            'day': timedelta(days=1),
-        }
+        df: DataFrame potentially containing nested lists/dicts
         
-        for resolution, offset in offsets.items():
-            mask = df['by_date'] == resolution
-            df.loc[mask, 'datetime'] = df.loc[mask, 'datetime'] - offset
+    Returns:
+        Fully unnested DataFrame with only scalar values
+    """
+    # Identify columns that contain lists or dicts
+    nested_cols = []
+    for col in df.columns:
+        sample_val = df[col].dropna().iloc[0] if len(df[col].dropna()) > 0 else None
+        if isinstance(sample_val, (list, dict)):
+            nested_cols.append(col)
     
-    # Select and rename columns
-    df = df[['datetime', 'value', 'status', 'valid', 'parameter', 'method_code',
-             'units_of_measure', 'latitude', 'longitude', 'site']].copy()
+    if not nested_cols:
+        # No nested structures, return as-is
+        return df
     
-    df.columns = ['datetime', 'sample_measurement', 'qualifier', 'valid',
-                  'parameter', 'method_code', 'units_of_measure',
-                  'latitude', 'longitude', 'site']
+    # Handle each nested column
+    result_df = df.copy()
     
-    # Add standard columns
-    df['simple_qual'] = df['qualifier']
-    df['data_source'] = 'envista'
-    df['poc'] = -9999
-    df['sample_frequency'] = 'hourly'
+    for col in nested_cols:
+        if result_df[col].dtype == 'object':
+            # Check the type of nested data
+            sample = result_df[col].dropna().iloc[0] if len(result_df[col].dropna()) > 0 else None
+            
+            if isinstance(sample, list):
+                # Explode lists into separate rows
+                result_df = result_df.explode(col, ignore_index=False)
+            
+            elif isinstance(sample, dict):
+                # Flatten dictionaries into separate columns
+                nested_data = result_df[col].apply(
+                    lambda x: pd.Series(x) if isinstance(x, dict) else pd.Series()
+                )
+                # Rename nested columns with parent column prefix
+                nested_data.columns = [f"{col}_{subcol}" for subcol in nested_data.columns]
+                # Drop original column and concatenate flattened data
+                result_df = result_df.drop(columns=[col])
+                result_df = pd.concat([result_df, nested_data], axis=1)
     
-    # Map qualifier codes if provided
-    if qualifier_codes is not None and not qualifier_codes.empty:
-        qualifier_map = dict(
-            zip(qualifier_codes['envista_qualifier_id'],
-                qualifier_codes['simple_qualifier'])
-        )
-        df['simple_qual'] = df['qualifier'].map(qualifier_map).fillna(df['qualifier'])
-    
-    # Apply type conversions
-    df = df.astype({
-        'datetime': 'datetime64[ns]',
-        'sample_measurement': 'float64',
-        'units_of_measure': 'str',
-        'qualifier': 'str',
-        'simple_qual': 'str',
-        'data_source': 'str',
-        'method_code': 'float64',
-        'method_type': 'str',
-        'poc': 'int64',
-        'site': 'str',
-        'latitude': 'float64',
-        'longitude': 'float64',
-        'sample_frequency': 'str',
-    }, errors='ignore')
-    
-    # Reorder columns
-    final_cols = ['datetime', 'sample_measurement', 'units_of_measure', 'qualifier',
-                  'simple_qual', 'data_source', 'method_code', 'parameter',
-                  'poc', 'site', 'latitude', 'longitude', 'sample_frequency']
-    
-    # Only select columns that exist
-    final_cols = [col for col in final_cols if col in df.columns]
-    
-    return df[final_cols]
-
+    # Recursively unnest if there are still nested structures
+    return _fully_unnest_dataframe(result_df)
