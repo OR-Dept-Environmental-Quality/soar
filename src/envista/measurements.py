@@ -33,7 +33,7 @@ def _get_session() -> requests.Session:
         _session_local.session = session
     return session
 
-def get_envista_sample(station_id: str, channel_id: str, from_date: str, to_date: str) -> pd.DataFrame | None:
+def get_envista_hourly(station_id: str, channel_id: str, from_date: str, to_date: str) -> pd.DataFrame | None:
     """Retrieve Envista measurement data for a specific site and channel.
 
     Fetches hourly measurement data from a specific station's channel over
@@ -87,11 +87,10 @@ def get_envista_sample(station_id: str, channel_id: str, from_date: str, to_date
         env_sample_df = _fully_unnest_dataframe(env_sample_df)
         
         # Validate: Skip if all values are NA for any column
-        all_na_columns = [col for col in env_sample_df.columns if env_sample_df[col].isna().all()]
-        if all_na_columns:
+        if env_sample_df['data_channels_value'].isna().all():
             logger.warning(
                 f"Skipping data for station={station_id}, channel={channel_id}: "
-                f"all-NA columns {all_na_columns}"
+                f"All values in 'data_channels_values' are NA"
             )
             return None
         
@@ -100,6 +99,76 @@ def get_envista_sample(station_id: str, channel_id: str, from_date: str, to_date
     
     except Exception as e:
         logger.error(f"Error retrieving Envista data for station={station_id}, "
+                     f"channel={channel_id}: {e}")
+        return None
+
+def get_envista_daily(station_id: str, channel_id: str, from_date: str, to_date: str) -> pd.DataFrame | None:
+    """Retrieve Envista averaged data for a specific site and channel.
+
+    Fetches daily averaged data from a specific station's channel over
+    a specified date range. Uses centralized _env_client for rate limiting,
+    retries, and circuit breaker.
+
+    Args:
+        station_id: Envista station ID
+        channel_id: Envista channel ID
+        from_date: Start date in ISO format (e.g., '2022-01-01')
+        to_date: End date in ISO format (e.g., '2022-12-31')
+
+    Returns:
+        DataFrame with parsed averaged data, or None if request fails or no data
+    """
+    if not ENV_URL or not ENV_USER or not ENV_KEY:
+        raise ValueError("Missing Envista credentials in configuration")
+
+    time_base = 60
+    
+    query = (
+        f"{ENV_URL}v1/envista/stations/{station_id}/Average"
+        f"?from={from_date}&to={to_date}&timebase={time_base}&timeBeginning=True"
+        f"&fromTimebase=60&toTimebase=1440&percentValid=75&filterChannel={channel_id}"
+    )
+    
+    logger.debug(f"Fetching Envista hourly averaged data: station={station_id}, channel={channel_id}, "
+                 f"from={from_date}, to={to_date}")
+    
+    try:
+        session = _get_session()
+        response = _env_client.fetch_json(session, query)
+        
+        if response is None:
+            logger.warning(f"No content returned for station={station_id}, channel={channel_id}")
+            return None
+        
+        # Convert response to DataFrame
+        if isinstance(response, list):
+            env_sample_df = pd.DataFrame(response)
+        elif isinstance(response, dict):
+            env_sample_df = pd.json_normalize(response)
+        else:
+            logger.warning(f"Unexpected response type: {type(response)}")
+            return None
+        
+        if env_sample_df is None or env_sample_df.empty:
+            logger.debug(f"Empty data for station={station_id}, channel={channel_id}")
+            return None
+
+        # Fully unnest the DataFrame to handle nested structures
+        env_sample_df = _fully_unnest_dataframe(env_sample_df)
+        
+        # Validate: Skip if all values are NA for any column
+        if env_sample_df['data_channels_value'].isna().all():
+            logger.warning(
+                f"Skipping daily averaged data for station={station_id}, channel={channel_id}: "
+                f"All values in 'data_channels_values' are NA"
+            )
+            return None
+        
+        logger.debug(f"Retrieved {len(env_sample_df)} records, shape={env_sample_df.shape}")
+        return env_sample_df
+    
+    except Exception as e:
+        logger.error(f"Error retrieving Envista daily averaged data for station={station_id}, "
                      f"channel={channel_id}: {e}")
         return None
 

@@ -39,6 +39,9 @@ _DEFAULT_TIMEOUT = int(getattr(config, "ENV_TIMEOUT", 120))
 _CIRCUIT_THRESHOLD = int(config.__dict__.get("ENV_CIRCUIT_THRESHOLD", 5))
 _CIRCUIT_COOLDOWN = int(config.__dict__.get("ENV_CIRCUIT_COOLDOWN", 1800))  # seconds
 
+# Variables from config
+ENV_KEY = getattr(config, "ENV_KEY", "")   
+ENV_USER = getattr(config, "ENV_USER", "")
 
 def _sleep_if_needed() -> None:
     """Enforce request pacing to honor Envista rate limits while allowing concurrency."""
@@ -147,8 +150,15 @@ def make_session(timeout: Optional[int] = None) -> requests.Session:
     Returns:
         Configured requests.Session instance.
     """
+    from requests.auth import HTTPBasicAuth
+    
     session = requests.Session()
     session.headers.update({"User-Agent": "soar-pipeline/1.0"})
+    
+    # Add HTTP Basic Auth if credentials are available
+    if ENV_USER and ENV_KEY:
+        session.auth = HTTPBasicAuth(ENV_USER, ENV_KEY)
+    
     # Store timeout in module-level dictionary to avoid Pylance type errors
     _session_timeouts[id(session)] = timeout if timeout is not None else _DEFAULT_TIMEOUT
     return session
