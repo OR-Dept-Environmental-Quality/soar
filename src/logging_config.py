@@ -58,6 +58,11 @@ LOGGING_CONFIG = {
             "handlers": ["console", "file"],
             "propagate": False,
         },
+        "envista": {
+            "level": "DEBUG",
+            "handlers": ["console", "file"],
+            "propagate": False,
+        },
     },
 }
 
@@ -98,6 +103,9 @@ def setup_logging(
         # Ensure logs directory exists
         log_path = Path(log_file)
         log_path.parent.mkdir(parents=True, exist_ok=True)
+        # Add file handler to root logger so all loggers use it
+        if "file" not in config["root"]["handlers"]:
+            config["root"]["handlers"].append("file")
     else:
         # Disable file handler if no log file specified
         config["handlers"].pop("file", None)

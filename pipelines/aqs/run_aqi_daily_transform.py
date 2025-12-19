@@ -29,7 +29,7 @@ def run():
     config.ensure_dirs()
 
     # Input directory (raw daily data)
-    raw_daily_dir = config.RAW_DAILY
+    raw_daily_dir = config.RAW_AQS_DAILY
 
     if not raw_daily_dir.exists():
         print(f"❌ Raw daily directory not found: {raw_daily_dir}")

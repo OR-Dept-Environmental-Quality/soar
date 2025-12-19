@@ -26,8 +26,8 @@ from loaders.filesystem import write_csv
 def main():
     # Paths
     dim_trv_path = ROOT / "ops" / "dimPollutant.csv"
-    sample_dir = config.RAW_SAMPLE
-    annual_dir = config.RAW_ANNUAL
+    sample_dir = config.RAW_AQS_SAMPLE
+    annual_dir = config.RAW_AQS_ANNUAL
     transform_dir = config.ROOT / "transform" / "trv" / "sample"
     annual_transform_dir = config.ROOT / "transform" / "trv" / "annual"
 

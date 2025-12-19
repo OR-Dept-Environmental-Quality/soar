@@ -26,8 +26,8 @@ from aqs import _client
 from aqs.extractors.monitors import fetch_monitors
 from loaders.filesystem import write_csv
 
-RAW_PARQUET = config.RAW / "monitors_raw.parquet"
-RAW_CSV = config.RAW / "monitors_raw.csv"
+RAW_PARQUET = config.RAW_AQS_MONITORS / "monitors_raw.parquet"
+RAW_CSV = config.RAW_AQS_MONITORS / "monitors_raw.csv"
 CURATED_PARQUET = config.TRANS / "monitors_curated.parquet"
 CURATED_CSV = config.TRANS / "monitors_curated.csv"
 STAGED_PARQUET = config.STAGED / "monitors_staged.parquet"
@@ -36,7 +36,7 @@ STAGED_CSV = config.STAGED / "monitors_staged.csv"
 
 def run() -> None:
     """Execute the metadata (monitors) pipeline end-to-end."""
-    config.ensure_dirs(config.RAW, config.TRANS, config.STAGED)
+    config.ensure_dirs(config.RAW_AQS_MONITORS, config.TRANS, config.STAGED)
     config.set_aqs_credentials()
 
     # Short-circuit if AQS is currently marked unhealthy by the circuit-breaker
@@ -130,7 +130,7 @@ def run() -> None:
         )
 
     print(
-        f"Fetching monitors for {len(params)} parameters and writing per-parameter CSVs to {config.RAW}"
+        f"Fetching monitors for {len(params)} parameters and writing per-parameter CSVs to {config.RAW_AQS_MONITORS}"
     )
 
     total_rows = 0
@@ -146,7 +146,7 @@ def run() -> None:
             print(f"No monitors found for {code} ({label})")
             continue
         safe_label = _sanitize_filename(label)
-        csv_path = config.RAW / f"monitors_{safe_label}.csv"
+        csv_path = config.RAW_AQS_MONITORS / f"monitors_{safe_label}.csv"
         write_csv(df, csv_path)
         total_rows += len(df)
 

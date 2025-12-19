@@ -45,7 +45,7 @@ from logging_config import (
 )
 from utils import get_parameter_group
 
-SAMPLE_BASE_DIR = config.RAW_SAMPLE
+SAMPLE_BASE_DIR = config.RAW_AQS_SAMPLE
 
 _session_local = threading.local()
 TEST_MODE = os.getenv("AQS_TEST_MODE", "").strip().lower() in {"1", "true", "yes", "on"}
@@ -413,7 +413,7 @@ def run_transform_service() -> None:
 
     # Transform annual toxics data to TRV exceedances
     print("\n🔄 Transforming ANNUAL toxics data to TRV exceedances...")
-    annual_dir = config.RAW_ANNUAL
+    annual_dir = config.RAW_AQS_ANNUAL
     annual_toxics_files = glob.glob(str(annual_dir / "aqs_annual_toxics_*.csv"))
     annual_transform_dir = config.ROOT / "transform" / "trv" / "annual"
     annual_transform_dir.mkdir(parents=True, exist_ok=True)
@@ -463,7 +463,7 @@ def run() -> None:
 
     # Setup and validation
     config.ensure_dirs(
-        config.RAW_SAMPLE, config.RAW_ANNUAL, config.TRANS, config.STAGED
+        config.RAW_AQS_SAMPLE, config.RAW_AQS_ANNUAL, config.TRANS, config.STAGED
     )
     config.set_aqs_credentials()
 
