@@ -34,7 +34,7 @@ def main(workers: int = 4) -> None:
 
     pm25 = df[df["group_store"].str.lower() == "pm25"]
     params = list(
-        pm25[["aqs_parameter", "analyte_name"]]
+        pm25[["aqs_parameter", "analyte_name_deq"]]
         .dropna()
         .itertuples(index=False, name=None)
     )
