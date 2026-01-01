@@ -51,12 +51,10 @@ def get_envista_hourly(station_id: str, channel_id: str, from_date: str, to_date
     """
     if not ENV_URL or not ENV_USER or not ENV_KEY:
         raise ValueError("Missing Envista credentials in configuration")
-
-    time_base = 60
     
     query = (
         f"{ENV_URL}v1/envista/stations/{station_id}/data/{channel_id}"
-        f"?from={from_date}&to={to_date}&timebase={time_base}&timeBeginning=True"
+        f"?from={from_date}&to={to_date}&timebase=60&timeBeginning=True"
     )
     
     logger.debug(f"Fetching Envista data: station={station_id}, channel={channel_id}, "
@@ -120,13 +118,11 @@ def get_envista_daily(station_id: str, channel_id: str, from_date: str, to_date:
     """
     if not ENV_URL or not ENV_USER or not ENV_KEY:
         raise ValueError("Missing Envista credentials in configuration")
-
-    time_base = 60
     
     query = (
         f"{ENV_URL}v1/envista/stations/{station_id}/Average"
-        f"?from={from_date}&to={to_date}&timebase={time_base}&timeBeginning=True"
-        f"&fromTimebase=60&toTimebase=1440&percentValid=75&filterChannel={channel_id}"
+        f"?from={from_date}&to={to_date}&timeBeginning=True"
+        f"&fromTimebase=60&toTimebase=1440&percentValid=75&filterChannels={channel_id}"
     )
     
     logger.debug(f"Fetching Envista hourly averaged data: station={station_id}, channel={channel_id}, "
@@ -152,6 +148,9 @@ def get_envista_daily(station_id: str, channel_id: str, from_date: str, to_date:
         if env_sample_df is None or env_sample_df.empty:
             logger.debug(f"Empty data for station={station_id}, channel={channel_id}")
             return None
+        
+        # Append station_id
+        env_sample_df['station_Id'] = station_id
 
         # Fully unnest the DataFrame to handle nested structures
         env_sample_df = _fully_unnest_dataframe(env_sample_df)
