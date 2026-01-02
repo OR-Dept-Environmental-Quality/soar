@@ -17,13 +17,7 @@ load_dotenv()
 
 # EPA AQS API credentials
 AQS_EMAIL = os.getenv("AQS_EMAIL")
-# Accept either AQS_KEY or legacy AQS_Key from user-provided .env files
-AQS_KEY = os.getenv("AQS_KEY") or os.getenv("AQS_Key")
-
-# Envista API credentials (aliases accept either ENV_* or ENVISTA_* names)
-ENV_USER = os.getenv("ENV_USER") or os.getenv("ENVISTA_USER")
-ENV_KEY = os.getenv("ENV_KEY") or os.getenv("ENVISTA_KEY")
-ENV_URL = os.getenv("ENV_URL") or os.getenv("ENVISTA_URL")
+AQS_KEY = os.getenv("AQS_KEY")
 
 # Envista API credentials
 ENV_USER = os.getenv("ENVISTA_USER")
