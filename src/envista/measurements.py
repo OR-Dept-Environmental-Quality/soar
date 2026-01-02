@@ -51,12 +51,10 @@ def get_envista_hourly(station_id: str, channel_id: str, from_date: str, to_date
     """
     if not ENV_URL or not ENV_USER or not ENV_KEY:
         raise ValueError("Missing Envista credentials in configuration")
-
-    time_base = 60
     
     query = (
         f"{ENV_URL}v1/envista/stations/{station_id}/data/{channel_id}"
-        f"?from={from_date}&to={to_date}&timebase={time_base}&timeBeginning=True"
+        f"?from={from_date}&to={to_date}&timebase=60&timeBeginning=True"
     )
     
     logger.debug(f"Fetching Envista data: station={station_id}, channel={channel_id}, "
@@ -120,16 +118,14 @@ def get_envista_daily(station_id: str, channel_id: str, from_date: str, to_date:
     """
     if not ENV_URL or not ENV_USER or not ENV_KEY:
         raise ValueError("Missing Envista credentials in configuration")
-
-    time_base = 60
     
     query = (
         f"{ENV_URL}v1/envista/stations/{station_id}/Average"
-        f"?from={from_date}&to={to_date}&timebase={time_base}&timeBeginning=True"
-        f"&fromTimebase=60&toTimebase=1440&percentValid=75&filterChannel={channel_id}"
+        f"?from={from_date}&to={to_date}&timeBeginning=True"
+        f"&fromTimebase=60&toTimebase=1440&percentValid=75&filterChannels={channel_id}"
     )
     
-    logger.debug(f"Fetching Envista hourly averaged data: station={station_id}, channel={channel_id}, "
+    logger.debug(f"Fetching Envista daily averaged data: station={station_id}, channel={channel_id}, "
                  f"from={from_date}, to={to_date}")
     
     try:
@@ -142,30 +138,33 @@ def get_envista_daily(station_id: str, channel_id: str, from_date: str, to_date:
         
         # Convert response to DataFrame
         if isinstance(response, list):
-            env_sample_df = pd.DataFrame(response)
+            env_daily_df = pd.DataFrame(response)
         elif isinstance(response, dict):
-            env_sample_df = pd.json_normalize(response)
+            env_daily_df = pd.json_normalize(response)
         else:
             logger.warning(f"Unexpected response type: {type(response)}")
             return None
         
-        if env_sample_df is None or env_sample_df.empty:
+        if env_daily_df is None or env_daily_df.empty:
             logger.debug(f"Empty data for station={station_id}, channel={channel_id}")
             return None
+        
+        # Append station_id
+        env_daily_df['station_Id'] = station_id
 
         # Fully unnest the DataFrame to handle nested structures
-        env_sample_df = _fully_unnest_dataframe(env_sample_df)
+        env_daily_df = _fully_unnest_dataframe(env_daily_df)
         
         # Validate: Skip if all values are NA for any column
-        if env_sample_df['data_channels_value'].isna().all():
+        if env_daily_df['data_channels_value'].isna().all():
             logger.warning(
                 f"Skipping daily averaged data for station={station_id}, channel={channel_id}: "
                 f"All values in 'data_channels_values' are NA"
             )
             return None
         
-        logger.debug(f"Retrieved {len(env_sample_df)} records, shape={env_sample_df.shape}")
-        return env_sample_df
+        logger.debug(f"Retrieved {len(env_daily_df)} records, shape={env_daily_df.shape}")
+        return env_daily_df
     
     except Exception as e:
         logger.error(f"Error retrieving Envista daily averaged data for station={station_id}, "
