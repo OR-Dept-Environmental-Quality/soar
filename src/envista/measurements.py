@@ -138,33 +138,33 @@ def get_envista_daily(station_id: str, channel_id: str, from_date: str, to_date:
         
         # Convert response to DataFrame
         if isinstance(response, list):
-            env_sample_df = pd.DataFrame(response)
+            env_daily_df = pd.DataFrame(response)
         elif isinstance(response, dict):
-            env_sample_df = pd.json_normalize(response)
+            env_daily_df = pd.json_normalize(response)
         else:
             logger.warning(f"Unexpected response type: {type(response)}")
             return None
         
-        if env_sample_df is None or env_sample_df.empty:
+        if env_daily_df is None or env_daily_df.empty:
             logger.debug(f"Empty data for station={station_id}, channel={channel_id}")
             return None
         
         # Append station_id
-        env_sample_df['station_Id'] = station_id
+        env_daily_df['station_Id'] = station_id
 
         # Fully unnest the DataFrame to handle nested structures
-        env_sample_df = _fully_unnest_dataframe(env_sample_df)
+        env_daily_df = _fully_unnest_dataframe(env_daily_df)
         
         # Validate: Skip if all values are NA for any column
-        if env_sample_df['data_channels_value'].isna().all():
+        if env_daily_df['data_channels_value'].isna().all():
             logger.warning(
                 f"Skipping daily averaged data for station={station_id}, channel={channel_id}: "
                 f"All values in 'data_channels_values' are NA"
             )
             return None
         
-        logger.debug(f"Retrieved {len(env_sample_df)} records, shape={env_sample_df.shape}")
-        return env_sample_df
+        logger.debug(f"Retrieved {len(env_daily_df)} records, shape={env_daily_df.shape}")
+        return env_daily_df
     
     except Exception as e:
         logger.error(f"Error retrieving Envista daily averaged data for station={station_id}, "
