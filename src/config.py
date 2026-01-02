@@ -17,7 +17,13 @@ load_dotenv()
 
 # EPA AQS API credentials
 AQS_EMAIL = os.getenv("AQS_EMAIL")
-AQS_KEY = os.getenv("AQS_KEY")
+# Accept either AQS_KEY or legacy AQS_Key from user-provided .env files
+AQS_KEY = os.getenv("AQS_KEY") or os.getenv("AQS_Key")
+
+# Envista API credentials (aliases accept either ENV_* or ENVISTA_* names)
+ENV_USER = os.getenv("ENV_USER") or os.getenv("ENVISTA_USER")
+ENV_KEY = os.getenv("ENV_KEY") or os.getenv("ENVISTA_KEY")
+ENV_URL = os.getenv("ENV_URL") or os.getenv("ENVISTA_URL")
 
 # Envista API credentials
 ENV_USER = os.getenv("ENVISTA_USER")
@@ -89,6 +95,21 @@ ENV_MIN_DELAY = float(os.getenv("ENV_MIN_DELAY", "0"))
 ENV_MAX_RPS = int(os.getenv("ENV_MAX_RPS", "5"))
 ENV_SAMPLE_YEAR_WORKERS = max(1, int(os.getenv("ENV_SAMPLE_YEAR_WORKERS", "3")))
 ENV_SAMPLE_PARAM_WORKERS = max(1, int(os.getenv("ENV_SAMPLE_PARAM_WORKERS", "3")))
+
+# Envista retry / circuit defaults
+ENV_TIMEOUT = int(os.getenv("ENV_TIMEOUT", "120"))
+ENV_RETRIES = int(os.getenv("ENV_RETRIES", "6"))
+ENV_BACKOFF_FACTOR = float(os.getenv("ENV_BACKOFF_FACTOR", "1.5"))
+ENV_RETRY_MAX_WAIT = int(os.getenv("ENV_RETRY_MAX_WAIT", "60"))
+ENV_MIN_DELAY = float(os.getenv("ENV_MIN_DELAY", "0"))
+ENV_MAX_RPS = int(os.getenv("ENV_MAX_RPS", "5"))
+ENV_SAMPLE_YEAR_WORKERS = max(1, int(os.getenv("ENV_SAMPLE_YEAR_WORKERS", "3")))
+ENV_SAMPLE_PARAM_WORKERS = max(1, int(os.getenv("ENV_SAMPLE_PARAM_WORKERS", "3")))
+
+# Envista circuit breaker settings (explicitly exposed)
+ENV_CIRCUIT_THRESHOLD = int(os.getenv("ENV_CIRCUIT_THRESHOLD", "5"))
+ENV_CIRCUIT_COOLDOWN = int(os.getenv("ENV_CIRCUIT_COOLDOWN", "1800"))
+
 
 def ensure_dirs(*paths: Path) -> None:
     """Create directory structures for data lake layers.
