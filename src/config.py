@@ -57,7 +57,8 @@ RAW_AQS_DAILY = RAW_DAILY
 RAW_AQS_ANNUAL = RAW_ANNUAL
 RAW_AQS_QUALIFIERS = RAW_QUALIFIERS
 
-# Envista raw paths (new) — created as aliases; directories will be created
+# Envista raw paths (new) — distinct envista/ directories for Envista data,
+# separate from the AQS raw paths defined above.
 RAW_ENV_MONITORS = ROOT / "raw" / "envista" / "monitors"
 RAW_ENV_SAMPLE = ROOT / "raw" / "envista" / "sample"
 RAW_ENV_DAILY = ROOT / "raw" / "envista" / "daily"
