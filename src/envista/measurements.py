@@ -125,7 +125,7 @@ def get_envista_daily(station_id: str, channel_id: str, from_date: str, to_date:
         f"&fromTimebase=60&toTimebase=1440&percentValid=75&filterChannels={channel_id}"
     )
     
-    logger.debug(f"Fetching Envista hourly averaged data: station={station_id}, channel={channel_id}, "
+    logger.debug(f"Fetching Envista daily averaged data: station={station_id}, channel={channel_id}, "
                  f"from={from_date}, to={to_date}")
     
     try:
