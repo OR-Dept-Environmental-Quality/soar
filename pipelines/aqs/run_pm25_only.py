@@ -29,15 +29,24 @@ from pipelines.aqs import run_aqs_service as runner
 
 def main(workers: int = 4) -> None:
     df = pd.read_csv(Path("ops") / "dimPollutant.csv", dtype=str)
-    if "group_store" not in df.columns:
-        raise KeyError("ops/dimPollutant.csv must contain 'group_store' column")
+
+    # Validate required columns (ensure canonical column exists; allow legacy name)
+    required = {"aqs_parameter", "group_store"}
+    missing = required - set(df.columns)
+    if missing:
+        raise KeyError(
+            f"ops/dimPollutant.csv missing required columns: {', '.join(sorted(missing))}"
+        )
+
+    # Prefer `analyte_name_deq`, fall back to `analyte_name` for backwards compatibility
+    label_col = "analyte_name_deq" if "analyte_name_deq" in df.columns else "analyte_name"
+    if label_col not in df.columns:
+        raise KeyError(
+            "ops/dimPollutant.csv must contain 'analyte_name_deq' or 'analyte_name' column"
+        )
 
     pm25 = df[df["group_store"].str.lower() == "pm25"]
-    params = list(
-        pm25[["aqs_parameter", "analyte_name_deq"]]
-        .dropna()
-        .itertuples(index=False, name=None)
-    )
+    params = list(pm25[["aqs_parameter", label_col]].dropna().itertuples(index=False, name=None))
     print(f"Processing {len(params)} pm25 parameters with {workers} workers")
 
     results = {}

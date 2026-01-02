@@ -17,7 +17,13 @@ load_dotenv()
 
 # EPA AQS API credentials
 AQS_EMAIL = os.getenv("AQS_EMAIL")
-AQS_KEY = os.getenv("AQS_KEY")
+# Accept either AQS_KEY or legacy AQS_Key from user-provided .env files
+AQS_KEY = os.getenv("AQS_KEY") or os.getenv("AQS_Key")
+
+# Envista API credentials (aliases accept either ENV_* or ENVISTA_* names)
+ENV_USER = os.getenv("ENV_USER") or os.getenv("ENVISTA_USER")
+ENV_KEY = os.getenv("ENV_KEY") or os.getenv("ENVISTA_KEY")
+ENV_URL = os.getenv("ENV_URL") or os.getenv("ENVISTA_URL")
 
 # State FIPS code (zero-padded to 2 digits)
 STATE = (os.getenv("STATE_CODE") or "").zfill(2)
@@ -41,6 +47,20 @@ RAW_SAMPLE = ROOT / "raw" / "aqs" / "sample"  # Sample data (hourly/sub-daily)
 RAW_DAILY = ROOT / "raw" / "aqs" / "daily"  # Daily summaries
 RAW_ANNUAL = ROOT / "raw" / "aqs" / "annual"  # Annual aggregates
 RAW_QUALIFIERS = ROOT / "raw" / "aqs" / "qualifiers"  # Qualifier data for toxics
+
+# Backwards-compatible aliases introduced by Envista feature PR
+# These map the new names used in PRs to the existing paths so old and
+# new code can coexist until a full rename/migration is performed.
+RAW_AQS_MONITORS = RAW
+RAW_AQS_SAMPLE = RAW_SAMPLE
+RAW_AQS_DAILY = RAW_DAILY
+RAW_AQS_ANNUAL = RAW_ANNUAL
+RAW_AQS_QUALIFIERS = RAW_QUALIFIERS
+
+# Envista raw paths (new) — created as aliases; directories will be created
+RAW_ENV_MONITORS = ROOT / "raw" / "envista" / "monitors"
+RAW_ENV_SAMPLE = ROOT / "raw" / "envista" / "sample"
+RAW_ENV_DAILY = ROOT / "raw" / "envista" / "daily"
 TRANS = ROOT / "transform" / "aqs" / "monitors"  # Transformed/curated layer
 STAGED = ROOT / "staged" / "aqs" / "monitors"  # Staged layer for analytics
 CTL_DIR = ROOT / "raw" / "aqs" / "_ctl"  # Control files (circuit breaker health, etc.)
@@ -70,6 +90,21 @@ AQS_SAMPLE_YEAR_WORKERS = max(1, int(os.getenv("AQS_SAMPLE_YEAR_WORKERS", "3")))
 AQS_SAMPLE_PARAM_WORKERS = max(1, int(os.getenv("AQS_SAMPLE_PARAM_WORKERS", "3")))
 AQS_ANNUAL_YEAR_WORKERS = max(1, int(os.getenv("AQS_ANNUAL_YEAR_WORKERS", "3")))
 AQS_DAILY_YEAR_WORKERS = max(1, int(os.getenv("AQS_DAILY_YEAR_WORKERS", "3")))
+
+
+# Envista retry / circuit defaults
+ENV_TIMEOUT = int(os.getenv("ENV_TIMEOUT", "120"))
+ENV_RETRIES = int(os.getenv("ENV_RETRIES", "6"))
+ENV_BACKOFF_FACTOR = float(os.getenv("ENV_BACKOFF_FACTOR", "1.5"))
+ENV_RETRY_MAX_WAIT = int(os.getenv("ENV_RETRY_MAX_WAIT", "60"))
+ENV_MIN_DELAY = float(os.getenv("ENV_MIN_DELAY", "0"))
+ENV_MAX_RPS = int(os.getenv("ENV_MAX_RPS", "5"))
+ENV_SAMPLE_YEAR_WORKERS = max(1, int(os.getenv("ENV_SAMPLE_YEAR_WORKERS", "3")))
+ENV_SAMPLE_PARAM_WORKERS = max(1, int(os.getenv("ENV_SAMPLE_PARAM_WORKERS", "3")))
+
+# Envista circuit breaker settings (explicitly exposed)
+ENV_CIRCUIT_THRESHOLD = int(os.getenv("ENV_CIRCUIT_THRESHOLD", "5"))
+ENV_CIRCUIT_COOLDOWN = int(os.getenv("ENV_CIRCUIT_COOLDOWN", "1800"))
 
 
 def ensure_dirs(*paths: Path) -> None:
