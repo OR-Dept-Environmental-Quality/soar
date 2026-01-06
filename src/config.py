@@ -81,15 +81,6 @@ AQS_SAMPLE_PARAM_WORKERS = max(1, int(os.getenv("AQS_SAMPLE_PARAM_WORKERS", "3")
 AQS_ANNUAL_YEAR_WORKERS = max(1, int(os.getenv("AQS_ANNUAL_YEAR_WORKERS", "3")))
 AQS_DAILY_YEAR_WORKERS = max(1, int(os.getenv("AQS_DAILY_YEAR_WORKERS", "3")))
 
-ENV_TIMEOUT = int(os.getenv("ENV_TIMEOUT", "120"))
-ENV_RETRIES = int(os.getenv("ENV_RETRIES", "6"))
-ENV_BACKOFF_FACTOR = float(os.getenv("ENV_BACKOFF_FACTOR", "1.5"))
-ENV_RETRY_MAX_WAIT = int(os.getenv("ENV_RETRY_MAX_WAIT", "60"))
-ENV_MIN_DELAY = float(os.getenv("ENV_MIN_DELAY", "0"))
-ENV_MAX_RPS = int(os.getenv("ENV_MAX_RPS", "5"))
-ENV_SAMPLE_YEAR_WORKERS = max(1, int(os.getenv("ENV_SAMPLE_YEAR_WORKERS", "3")))
-ENV_SAMPLE_PARAM_WORKERS = max(1, int(os.getenv("ENV_SAMPLE_PARAM_WORKERS", "3")))
-
 # Envista retry / circuit defaults
 ENV_TIMEOUT = int(os.getenv("ENV_TIMEOUT", "120"))
 ENV_RETRIES = int(os.getenv("ENV_RETRIES", "6"))
