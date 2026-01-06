@@ -1,12 +1,34 @@
 """AQS pipeline orchestration for sample, annual, daily, and transform data.
 
-This pipeline extracts air quality data from EPA's AQS API in consecutive service order:
-1. Sample data: Hourly/sub-daily measurements for ALL parameters (toxics + criteria)
-2. Annual data: Annual statistical aggregates for ALL parameters (toxics + criteria)
-3. Daily data: Daily statistical summaries for criteria pollutants only
-4. Transform: TRV exceedance calculations for toxics data only
+This runner extracts air quality data from EPA's AQS API. The set of parameters to
+extract is driven by `ops/dimPollutant.csv`:
 
-Services run consecutively with year-by-year parameter processing within each service.
+- `aqs_parameter` is the AQS parameter code used for API calls.
+- `analyte_name_deq` (or `analyte_name`) is used for display/logging.
+- `group_store` controls how output files are grouped and named.
+
+Services run consecutively, with year-by-year processing inside each service:
+1. Sample data: sub-daily measurements for ALL parameters (toxics + non-toxics)
+2. Annual data: annual aggregates for ALL parameters (toxics + non-toxics)
+3. Daily data: daily summaries for NON-TOXICS parameters only
+
+Filtering by group_store
+------------------------
+You can filter what runs by `group_store` using either:
+
+- CLI flag: `--group-store pm25,ozone`
+- Env var: `AQS_GROUP_STORE=pm25,ozone`
+
+If neither is provided, all parameters in `ops/dimPollutant.csv` are included.
+
+Selecting services
+------------------
+You can also limit which services execute (sample, annual, daily, transform):
+
+- CLI flag: `--services sample,daily`
+- Env var: `AQS_SERVICES=sample`
+
+If neither is provided, the runner executes sample, annual, and daily services in order.
 """
 
 from __future__ import annotations
@@ -43,7 +65,6 @@ from logging_config import (
     log_pipeline_start,
     setup_logging,
 )
-from utils import get_parameter_group
 
 SAMPLE_BASE_DIR = config.RAW_AQS_SAMPLE
 
@@ -51,6 +72,8 @@ _session_local = threading.local()
 TEST_MODE = os.getenv("AQS_TEST_MODE", "").strip().lower() in {"1", "true", "yes", "on"}
 _checkpoint_registry_lock = threading.Lock()
 _checkpoint_locks: dict[str, threading.Lock] = {}
+VALID_SERVICES = {"sample", "annual", "daily", "transform"}
+DEFAULT_SERVICES = ("sample", "annual", "daily")
 
 
 def _checkpoint_key(service: str, year: str | None) -> str:
@@ -126,12 +149,17 @@ def _write_parameter_outputs(param_label: str, frame: pd.DataFrame) -> None:
 
 
 def _process_parameter_for_year(
-    param_code: str, param_label: str, year: str, state: str, service: str
-) -> tuple[str, int, bool]:
+    param_code: str,
+    param_label: str,
+    group_store: str,
+    year: str,
+    state: str,
+    service: str,
+) -> tuple[str, int, bool, str | None]:
     """Extract data for one parameter in one specific year.
 
-    Returns a tuple of (parameter_name, rows_written, succeeded) so callers can
-    decide whether to advance checkpoints."""
+    Returns a tuple of (parameter_name, rows_written, succeeded, error_message) so callers can
+    decide whether to advance checkpoints and log failures."""
     bdate = f"{year}0101"
     edate = f"{year}1231"
 
@@ -153,7 +181,6 @@ def _process_parameter_for_year(
                 for year_token, df in res:
                     if df is None or df.empty:
                         continue
-                    group_store = get_parameter_group(param_code)
                     year_csv = (
                         SAMPLE_BASE_DIR / f"aqs_sample_{group_store}_{year_token}.csv"
                     )
@@ -163,17 +190,15 @@ def _process_parameter_for_year(
                 # Legacy batch mode
                 df_all = res
                 if df_all is None or df_all.empty:
-                    return param_label, 0
+                    return param_label, 0, True, None
                 SAMPLE_BASE_DIR.mkdir(parents=True, exist_ok=True)
-                group_store = get_parameter_group(param_code)
                 csv_path = SAMPLE_BASE_DIR / f"aqs_sample_{group_store}_{year}.csv"
                 append_csv(df_all, csv_path)
                 total += len(df_all)
-            return param_label, total, True
+            return param_label, total, True, None
 
         elif service == "annual":
             # Annual data extraction
-            group_store = get_parameter_group(param_code)
             write_annual_for_parameter(
                 param_code,
                 param_label,
@@ -185,11 +210,10 @@ def _process_parameter_for_year(
             )
             # Count rows written (simplified - actual count would need to be returned from write_annual_for_parameter)
             total = 1  # Placeholder
-            return param_label, total, True
+            return param_label, total, True, None
 
         elif service == "daily":
             # Daily data extraction (criteria only)
-            group_store = get_parameter_group(param_code)
             write_daily_for_parameter(
                 param_code,
                 param_label,
@@ -201,15 +225,45 @@ def _process_parameter_for_year(
             )
             # Count rows written (simplified)
             total = 1  # Placeholder
-            return param_label, total, True
+            return param_label, total, True, None
 
         raise ValueError(f"Unknown service type '{service}'")
 
     except Exception as exc:
+        error_msg = str(exc)
         print(
-            f"    ERROR: Parameter {param_label} ({param_code}) failed in {year}: {exc}"
+            f"    ERROR: Parameter {param_label} ({param_code}) failed in {year}: {error_msg}"
         )
-        return param_label, 0, False
+        return param_label, 0, False, error_msg
+
+
+def _log_skipped_parameters(
+    skipped_params: list[dict], service: str, year: str
+) -> None:
+    """Log skipped/failed parameters to CSV file in logs directory.
+    
+    Args:
+        skipped_params: List of dicts with keys: param_code, param_label, group_store,
+                       year, service, error_message, timestamp
+        service: Service name (sample, annual, daily)
+        year: Year being processed
+    """
+    if not skipped_params:
+        return
+    
+    logs_dir = config.ROOT / "raw" / "aqs" / "logs"
+    logs_dir.mkdir(parents=True, exist_ok=True)
+    
+    log_file = logs_dir / "skipped_parameters.csv"
+    
+    # Convert to DataFrame
+    df = pd.DataFrame(skipped_params)
+    
+    # Append to existing file or create new with header
+    from loaders.filesystem import append_csv
+    append_csv(df, log_file)
+    
+    print(f"   📝 Logged {len(skipped_params)} skipped parameter(s) to {log_file.name}")
 
 
 def _sanitize_filename(name: str, max_len: int = 80) -> str:
@@ -251,43 +305,65 @@ def _sanitize_filename(name: str, max_len: int = 80) -> str:
 
 
 def _process_year_sample(
-    year: str, all_params: list[tuple[str, str]], state: str
+    year: str, all_params: list[tuple[str, str, str]], state: str
 ) -> int:
     """Process sample data extraction for a single year. Returns total rows written."""
     print(f"\n📅 Processing SAMPLE data for year {year}")
     print("-" * 40)
 
     year_sample_rows = 0
+    skipped_params = []
 
     # Check checkpoint for resume capability
     checkpoint = _load_checkpoint("sample", year)
     start_param_index = checkpoint.get("last_param_index", -1) + 1
 
     # Process parameters sequentially (one at a time for retry runs)
-    for index, (param_code, param_label) in enumerate(all_params):
+    for index, (param_code, param_label, group_store) in enumerate(all_params):
         if index < start_param_index:
             print(f"  ⏭️  Skipping already processed {param_label} ({param_code})")
             continue
-        _, rows, succeeded = _process_parameter_for_year(
-            param_code, param_label, year, state, "sample"
+        _, rows, succeeded, error_msg = _process_parameter_for_year(
+            param_code, param_label, group_store, year, state, "sample"
         )
         if succeeded:
             # Save checkpoint after each successful parameter
             _save_checkpoint("sample", year, index)
             year_sample_rows += rows
         else:
+            # Log failure details for CSV output
+            skipped_params.append({
+                "param_code": param_code,
+                "param_label": param_label,
+                "group_store": group_store,
+                "year": year,
+                "service": "sample",
+                "error_message": error_msg or "Unknown error",
+                "timestamp": datetime.now().isoformat(),
+            })
             print(
-                f"  🔁 Will retry {param_label} on next run (checkpoint not advanced)"
+                f"  ⚠️  Skipping {param_label} after failure (will not block other parameters)"
             )
+            # Still advance checkpoint so we don't retry this failed param forever
+            _save_checkpoint("sample", year, index)
 
     _clear_checkpoint("sample", year)
+
+    # Log skipped parameters to CSV
+    if skipped_params:
+        print(f"\n⚠️  {len(skipped_params)} parameter(s) failed for {year}:")
+        for sp in skipped_params[:10]:  # Show first 10
+            print(f"     - {sp['param_label']} ({sp['param_code']}): {sp['error_message'][:60]}")
+        if len(skipped_params) > 10:
+            print(f"     ... and {len(skipped_params) - 10} more")
+        _log_skipped_parameters(skipped_params, "sample", year)
 
     print(f"✅ Completed SAMPLE extraction for {year}: {year_sample_rows} total rows")
     return year_sample_rows
 
 
 def run_sample_service(
-    years: list[str], all_params: list[tuple[str, str]], state: str
+    years: list[str], all_params: list[tuple[str, str, str]], state: str
 ) -> None:
     """Run sample data extraction service for ALL parameters (toxics + criteria), year by year."""
     print("\n" + "=" * 60)
@@ -312,24 +388,38 @@ def run_sample_service(
 
 
 def _process_year_annual(
-    year: str, all_params: list[tuple[str, str]], state: str
+    year: str, all_params: list[tuple[str, str, str]], state: str
 ) -> None:
     """Process annual data extraction for a single year."""
     print(f"\n📅 Processing ANNUAL data for year {year}")
     print("-" * 40)
 
-    for param_code, param_label in all_params:
-        _, _, succeeded = _process_parameter_for_year(
-            param_code, param_label, year, state, "annual"
+    skipped_params = []
+
+    for param_code, param_label, group_store in all_params:
+        _, _, succeeded, error_msg = _process_parameter_for_year(
+            param_code, param_label, group_store, year, state, "annual"
         )
         if not succeeded:
-            print(f"  🔁 Will retry {param_label} on next run (annual service)")
+            skipped_params.append({
+                "param_code": param_code,
+                "param_label": param_label,
+                "group_store": group_store,
+                "year": year,
+                "service": "annual",
+                "error_message": error_msg or "Unknown error",
+                "timestamp": datetime.now().isoformat(),
+            })
+
+    if skipped_params:
+        print(f"\n⚠️  {len(skipped_params)} parameter(s) failed for {year}")
+        _log_skipped_parameters(skipped_params, "annual", year)
 
     print(f"✅ Completed ANNUAL extraction for {year}")
 
 
 def run_annual_service(
-    years: list[str], all_params: list[tuple[str, str]], state: str
+    years: list[str], all_params: list[tuple[str, str, str]], state: str
 ) -> None:
     """Run annual data extraction service for ALL parameters (toxics + criteria), year by year."""
     print("\n" + "=" * 60)
@@ -349,24 +439,38 @@ def run_annual_service(
 
 
 def _process_year_daily(
-    year: str, criteria_params: list[tuple[str, str]], state: str
+    year: str, daily_params: list[tuple[str, str, str]], state: str
 ) -> None:
     """Process daily data extraction for a single year."""
     print(f"\n📅 Processing DAILY data for year {year}")
     print("-" * 40)
 
-    for param_code, param_label in criteria_params:
-        _, _, succeeded = _process_parameter_for_year(
-            param_code, param_label, year, state, "daily"
+    skipped_params = []
+
+    for param_code, param_label, group_store in daily_params:
+        _, _, succeeded, error_msg = _process_parameter_for_year(
+            param_code, param_label, group_store, year, state, "daily"
         )
         if not succeeded:
-            print(f"  🔁 Will retry {param_label} on next run (daily service)")
+            skipped_params.append({
+                "param_code": param_code,
+                "param_label": param_label,
+                "group_store": group_store,
+                "year": year,
+                "service": "daily",
+                "error_message": error_msg or "Unknown error",
+                "timestamp": datetime.now().isoformat(),
+            })
+
+    if skipped_params:
+        print(f"\n⚠️  {len(skipped_params)} parameter(s) failed for {year}")
+        _log_skipped_parameters(skipped_params, "daily", year)
 
     print(f"✅ Completed DAILY extraction for {year}")
 
 
 def run_daily_service(
-    years: list[str], criteria_params: list[tuple[str, str]], state: str
+    years: list[str], daily_params: list[tuple[str, str, str]], state: str
 ) -> None:
     """Run daily data extraction service for criteria pollutants only, year by year."""
     print("\n" + "=" * 60)
@@ -376,7 +480,7 @@ def run_daily_service(
     # Process years concurrently (configurable to balance speed vs API limits)
     with ThreadPoolExecutor(max_workers=config.AQS_DAILY_YEAR_WORKERS) as executor:
         futures = [
-            executor.submit(_process_year_daily, year, criteria_params, state)
+            executor.submit(_process_year_daily, year, daily_params, state)
             for year in years
         ]
         for future in futures:
@@ -432,7 +536,10 @@ def run_transform_service() -> None:
     print("\n🎉 TRANSFORM SERVICE COMPLETE")
 
 
-def run() -> None:
+def run(
+    selected_group_stores: set[str] | None = None,
+    selected_services: set[str] | None = None,
+) -> None:
     """Execute full AQS data extraction pipeline in consecutive service order.
 
     Service execution order:
@@ -448,6 +555,13 @@ def run() -> None:
         DATAREPO_ROOT: Root directory for data lake output
         AQS_EMAIL: EPA AQS API email credential
         AQS_KEY: EPA AQS API key credential
+
+    Optional controls:
+        AQS_GROUP_STORE: Comma-separated list of group_store values to run
+            (example: "pm25,ozone").
+        AQS_SERVICES: Comma-separated subset of services to run
+            (choose from "sample", "annual", "daily", "transform").
+        AQS_TEST_MODE: When truthy, limits the run to a small number of parameters/years.
     """
     # Setup logging
     log_level = "DEBUG" if TEST_MODE else "INFO"
@@ -463,9 +577,26 @@ def run() -> None:
 
     # Setup and validation
     config.ensure_dirs(
-        config.RAW_AQS_SAMPLE, config.RAW_AQS_ANNUAL, config.TRANS, config.STAGED
+        config.RAW_AQS_SAMPLE,
+        config.RAW_AQS_ANNUAL,
+        config.RAW_AQS_DAILY,
+        config.CTL_DIR,
     )
     config.set_aqs_credentials()
+
+    if selected_services:
+        unknown_services = selected_services - VALID_SERVICES
+        if unknown_services:
+            raise ValueError(
+                "Unknown service(s): "
+                + ", ".join(sorted(unknown_services))
+                + f". Valid options: {sorted(VALID_SERVICES)}"
+            )
+        services_to_run = set(selected_services)
+    else:
+        services_to_run = set(DEFAULT_SERVICES)
+
+    logger.info(f"🧩 Services scheduled: {', '.join(sorted(services_to_run))}")
 
     # Check circuit breaker
     if _client.circuit_is_open():
@@ -489,18 +620,48 @@ def run() -> None:
     dfp = pd.read_csv("ops/dimPollutant.csv", dtype=str)
     if (
         "aqs_parameter" not in dfp.columns
-        or "analyte_name_deq" not in dfp.columns
         or "group_store" not in dfp.columns
     ):
         raise KeyError(
-            "ops/dimPollutant.csv must contain 'aqs_parameter', 'analyte_name_deq', and 'group_store' columns"
+            "ops/dimPollutant.csv must contain 'aqs_parameter' and 'group_store' columns"
         )
 
-    # Filter parameter lists to Criteria only
-    criteria_df = dfp[dfp["analyte_group"] == "Criteria"]
+    label_col = "analyte_name_deq" if "analyte_name_deq" in dfp.columns else "analyte_name"
+    if label_col not in dfp.columns:
+        raise KeyError(
+            "ops/dimPollutant.csv must contain either 'analyte_name_deq' or 'analyte_name' column"
+        )
+
+    dfp["group_store_norm"] = dfp["group_store"].astype(str).str.strip().str.lower()
+
+    if selected_group_stores:
+        available = set(dfp["group_store_norm"].dropna().unique())
+        unknown = set(selected_group_stores) - available
+        if unknown:
+            raise ValueError(
+                f"Unknown group_store(s): {sorted(unknown)}. Available: {sorted(available)}"
+            )
+        dfp_run = dfp[dfp["group_store_norm"].isin(selected_group_stores)]
+    else:
+        dfp_run = dfp
+
     all_params = list(
-        criteria_df[["aqs_parameter", "analyte_name_deq"]]
+        dfp_run[["aqs_parameter", label_col, "group_store_norm"]]
         .dropna()
+        .drop_duplicates(subset=["aqs_parameter"])
+        .itertuples(index=False, name=None)
+    )
+
+    if not all_params:
+        raise ValueError(
+            "No parameters selected from ops/dimPollutant.csv (check group_store values and any group-store filter)."
+        )
+
+    daily_params = list(
+        dfp_run[dfp_run["group_store_norm"] != "toxics"]
+        [["aqs_parameter", label_col, "group_store_norm"]]
+        .dropna()
+        .drop_duplicates(subset=["aqs_parameter"])
         .itertuples(index=False, name=None)
     )
 
@@ -508,10 +669,11 @@ def run() -> None:
         print("🧪 TEST MODE: Limiting to 5 parameters")
         all_params = all_params[:5]
 
-    criteria_params = all_params  # Same as all_params now
+    if TEST_MODE and len(daily_params) > 5:
+        daily_params = daily_params[:5]
 
-    print(f"📊 Found {len(all_params)} total parameters")
-    print(f"📊 Found {len(criteria_params)} criteria parameters")
+    print(f"📊 Selected {len(all_params)} parameters for sample+annual")
+    print(f"📊 Selected {len(daily_params)} parameters for daily (non-toxics)")
 
     # Generate years list
     start_year = config.BDATE.year
@@ -526,10 +688,17 @@ def run() -> None:
 
     # Execute services in consecutive order (extraction only, skip transform)
     try:
-        run_sample_service(years, all_params, config.STATE)
-        run_annual_service(years, all_params, config.STATE)
-        run_daily_service(years, criteria_params, config.STATE)
-        # run_transform_service()  # Skipped for extraction only
+        if "sample" in services_to_run:
+            run_sample_service(years, all_params, config.STATE)
+
+        if "annual" in services_to_run:
+            run_annual_service(years, all_params, config.STATE)
+
+        if "daily" in services_to_run:
+            run_daily_service(years, daily_params, config.STATE)
+
+        if "transform" in services_to_run:
+            run_transform_service()
 
         logger.info("=" * 60)
         logger.info("🎉 AQS PIPELINE EXECUTION COMPLETE")
@@ -549,4 +718,36 @@ def run() -> None:
 
 
 if __name__ == "__main__":
-    run()
+    import argparse
+
+    parser = argparse.ArgumentParser(
+        description="Run AQS extraction services driven by ops/dimPollutant.csv"
+    )
+    parser.add_argument(
+        "--group-store",
+        help=(
+            "Comma-separated list of group_store values to run (e.g. 'pm25' or 'pm25,ozone'). "
+            "If omitted, runs all group_store values. Can also be set via AQS_GROUP_STORE env var."
+        ),
+    )
+    parser.add_argument(
+        "--services",
+        help=(
+            "Comma-separated list of services to run (choose from 'sample', 'annual', 'daily', 'transform'). "
+            "If omitted, runs the default sample+annual+daily trio. Can also be set via AQS_SERVICES env var."
+        ),
+    )
+    args = parser.parse_args()
+
+    raw_group = (args.group_store or os.getenv("AQS_GROUP_STORE", "")).strip()
+    selected_groups = {s.strip().lower() for s in raw_group.split(",") if s.strip()} or None
+
+    raw_services = (args.services or os.getenv("AQS_SERVICES", "")).strip()
+    selected_services = {
+        s.strip().lower() for s in raw_services.split(",") if s.strip()
+    } or None
+
+    run(
+        selected_group_stores=selected_groups,
+        selected_services=selected_services,
+    )

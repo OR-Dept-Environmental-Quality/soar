@@ -100,7 +100,11 @@ def _write_health(state: dict) -> None:
 def _open_circuit() -> None:
     state = _read_health()
     state["consecutive_failures"] = state.get("consecutive_failures", 0) + 1
-    state["opened_at"] = datetime.utcnow().isoformat()
+    # Only set opened_at when we actually hit the threshold
+    if state["consecutive_failures"] >= _CIRCUIT_THRESHOLD:
+        state["opened_at"] = datetime.utcnow().isoformat()
+        print(f"\n⚠️  CIRCUIT BREAKER OPENED after {state['consecutive_failures']} consecutive failures")
+        print(f"   Will block requests for {_CIRCUIT_COOLDOWN}s to prevent hammering AQS\n")
     _write_health(state)
 
 
@@ -200,16 +204,27 @@ def fetch_json(session: requests.Session, url: str) -> dict:
             # if service tells us to slow down, honor it
             if resp.status_code == 429:
                 retry_after = _parse_retry_after(resp)
-                _sleep_backoff(attempt, retry_after=retry_after)
+                if attempt < _AQS_RETRIES:
+                    print(f"  ⏳ Rate limited (429), waiting {retry_after or 'default'}s before retry {attempt+1}/{_AQS_RETRIES}")
+                    _sleep_backoff(attempt, retry_after=retry_after)
                 last_exc = requests.exceptions.RetryError("429 Too Many Requests")
                 continue
             resp.raise_for_status()
             # success -> reset circuit
             _reset_circuit()
-            return resp.json()
+            try:
+                return resp.json()
+            except (ValueError, json.JSONDecodeError) as json_exc:
+                # AQS returned invalid JSON - treat as transient error
+                if attempt < _AQS_RETRIES:
+                    print(f"  ⚠️  Invalid JSON response, retrying {attempt+1}/{_AQS_RETRIES}")
+                    _sleep_backoff(attempt)
+                    last_exc = json_exc
+                    continue
+                raise json_exc
         except requests.exceptions.RequestException as exc:
             last_exc = exc
-            # server-side 5xx errors should increment failure counter
+            # Only increment circuit on server errors (5xx), not client errors (4xx)
             status = (
                 getattr(exc.response, "status_code", None)
                 if hasattr(exc, "response")
@@ -217,7 +232,13 @@ def fetch_json(session: requests.Session, url: str) -> dict:
             )
             if status and 500 <= status < 600:
                 _open_circuit()
-            # allow backoff and retry
+                if attempt < _AQS_RETRIES:
+                    print(f"  ❌ Server error ({status}), retrying {attempt+1}/{_AQS_RETRIES}")
+            elif status and 400 <= status < 500:
+                # Client errors (4xx) are not retriable - fail fast
+                print(f"  ❌ Client error ({status}), not retrying")
+                raise exc
+            # allow backoff and retry for transient errors
             retry_after = None
             try:
                 retry_after = (
@@ -232,6 +253,8 @@ def fetch_json(session: requests.Session, url: str) -> dict:
                 continue
             break
     # all retries exhausted
+    if last_exc:
+        print(f"  💥 All retries exhausted, giving up on this request")
     raise last_exc
 
 

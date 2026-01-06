@@ -109,5 +109,9 @@ toxics,Metals,"Manganese, Total",7439-96-5,54.938,,,0.09,0.3,85132,,I
 toxics,Metals,"Nickel, Total",7440-02-0,58.693,,0.0038,0.014,0.2,85136,,I
 toxics,Metals,"Selenium, Total",7782-49-2,78.97,,,,2,85154,,II
 pm25,PM25,PM2.5 Estimate,,,,,,,88502,,
-pm2.5,PM25,PM2.5 FRM,,,,,,,88101,,
-ozone,Ozone,Ozone,,,,,,,44201,,
+pm25,PM25,PM2.5 FRM,,,,,,,88101,,I
+ozone,Ozone,Ozone,10028-15-6,,,,,,44201,,I
+pm10,PM10,PM10,,,,,,,85101,,I
+co,CO,Carbon Monoxide,630-08-0,,,,,,42101,,I
+so2,SO2,Sulfur Dioxide,7446-09-5,,,,,,42401,,I
+no2,NO2,Nitrogen Dioxide,10102-44-0,,,,,,42602,,I
