@@ -51,7 +51,11 @@ RAW_ENV_MONITORS = ROOT / "raw" / "envista" / "monitors"  # Envista monitor meta
 RAW_ENV_SAMPLE = ROOT / "raw" / "envista" / "sample"  # Envista sample data
 RAW_ENV_DAILY = ROOT / "raw" / "envista" / "daily"
 
-TRANS = ROOT / "transform" / "aqs" / "monitors"  # Transformed/curated layer
+TRANS_MONITORS = ROOT / "transform" / "monitors"  # Transformed/curated layer
+TRANS_SAMPLE = ROOT / "transform" / "sample"  # Transformed sample data
+TRANS_DAILY = ROOT / "transform" / "daily"  # Transformed daily summaries
+TRANS_AQI = ROOT / "transform" / "aqi"  # Transformed AQI data
+
 STAGED = ROOT / "staged" / "aqs" / "monitors"  # Staged layer for analytics
 CTL_DIR = ROOT / "raw" / "aqs" / "_ctl"  # Control files (circuit breaker health, etc.)
 
