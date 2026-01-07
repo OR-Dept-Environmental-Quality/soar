@@ -463,7 +463,7 @@ def run() -> None:
 
     # Setup and validation
     config.ensure_dirs(
-        config.RAW_AQS_SAMPLE, config.RAW_AQS_ANNUAL, config.TRANS, config.STAGED
+        config.RAW_AQS_SAMPLE, config.RAW_AQS_ANNUAL, config.TRANS_MONITORS, config.STAGED
     )
     config.set_aqs_credentials()
 
