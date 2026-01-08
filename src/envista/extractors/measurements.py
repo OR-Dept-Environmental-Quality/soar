@@ -17,7 +17,7 @@ import requests
 
 from config import ENV_KEY, ENV_URL, ENV_USER
 from logging_config import get_logger
-from . import _env_client
+from .. import _env_client
 
 logger = get_logger(__name__)
 
