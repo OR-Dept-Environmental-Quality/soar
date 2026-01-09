@@ -74,11 +74,7 @@ def transform_env_daily(year: str, raw_daily_files: list[Path], unique_monitors:
     transformed_df["first_max_value"] = pd.NA
     transformed_df["first_max_hour"] = pd.NA
 
-    if transformed_df["validity_indicator"] == True:
-        transformed_df["validity_indicator"] = "Y"
-    
-    if transformed_df["validity_indicator"] == False:
-        transformed_df["validity_indicator"] = "N"
+    transformed_df["validity_indicator"] = transformed_df["validity_indicator"].map({True: "Y", False: "N"})
 
     final_df = calculate_aqi(transformed_df)
 
