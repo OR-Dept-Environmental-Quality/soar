@@ -100,11 +100,11 @@ def transform_env_daily_for_year(year: str, raw_daily_dir: Path, unique_monitors
     daily_files = list(raw_daily_dir.glob(pattern))
 
     if not daily_files:
-        print(f"⚠️  No daily files found for year {year}")
+        print(f"No daily files found for year {year}")
         return pd.DataFrame()
 
-    print(f"📊 Found {len(daily_files)} daily files for year {year}")
+    print(f"Found {len(daily_files)} daily files for year {year}")
     for file_path in daily_files:
-        print(f"  📄 {file_path.name}")
+        print(f"{file_path.name}")
 
     return transform_env_daily(year, daily_files, unique_monitors)
