@@ -54,7 +54,7 @@ def pm25_to_aqi_with_date_check(row: pd.Series) -> int | Any:
     """Apply appropriate AQI calculation based on date."""
     concentration = row["arithmetic_mean"]
     date_local = pd.to_datetime(row["date_local"])
-    cutoff_date = pd.to_datetime("2024-05-06")
+    cutoff_date = pd.to_datetime("2024-05-06 00:00:00 -0800")
     
     if date_local < cutoff_date:
         return pm25_to_aqi_old(concentration)
