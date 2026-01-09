@@ -6,11 +6,10 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from numpy import int64
 import pandas as pd
 
 def pm25_to_aqi_old(concentration: float) -> int | Any:
-    """Convert PM2.5 concentration to AQI value."""
+    """Convert PM2.5 concentration to AQI value based on AQI formula for data before May 6, 2024."""
     if pd.isna(concentration):
         return pd.NA
     if concentration <= 12.0:
@@ -31,7 +30,7 @@ def pm25_to_aqi_old(concentration: float) -> int | Any:
         return 500
 
 def pm25_to_aqi_new(concentration: float) -> int | Any:
-    """Convert PM2.5 concentration to AQI value."""
+    """Convert PM2.5 concentration to AQI value based on AQI formula for data after May 6, 2024."""
     if pd.isna(concentration):
         return pd.NA
     if concentration <= 9.0:
@@ -51,6 +50,17 @@ def pm25_to_aqi_new(concentration: float) -> int | Any:
     else:
         return 500
 
+def pm25_to_aqi_with_date_check(row: pd.Series) -> int | Any:
+    """Apply appropriate AQI calculation based on date."""
+    concentration = row["arithmetic_mean"]
+    date_local = pd.to_datetime(row["date_local"])
+    cutoff_date = pd.to_datetime("2024-05-06")
+    
+    if date_local < cutoff_date:
+        return pm25_to_aqi_old(concentration)
+    else:
+        return pm25_to_aqi_new(concentration)
+        
 def calculate_aqi(df: pd.DataFrame) -> pd.DataFrame:
     """Calculate AQI values based on PM2.5 concentrations.
 
@@ -63,17 +73,6 @@ def calculate_aqi(df: pd.DataFrame) -> pd.DataFrame:
     Returns:
         pd.DataFrame: DataFrame with an additional 'aqi' column.
     """
-
-    def pm25_to_aqi_with_date_check(row):
-        """Apply appropriate AQI calculation based on date."""
-        concentration = row["arithmetic_mean"]
-        date_local = pd.to_datetime(row["date_local"])
-        cutoff_date = pd.to_datetime("2024-05-06")
-        
-        if date_local < cutoff_date:
-            return pm25_to_aqi_old(concentration)
-        else:
-            return pm25_to_aqi_new(concentration)
 
     df["aqi"] = df.apply(pm25_to_aqi_with_date_check, axis=1)
     return df
