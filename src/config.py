@@ -94,6 +94,7 @@ ENV_MIN_DELAY = float(os.getenv("ENV_MIN_DELAY", "0"))
 ENV_MAX_RPS = int(os.getenv("ENV_MAX_RPS", "5"))
 ENV_SAMPLE_YEAR_WORKERS = max(1, int(os.getenv("ENV_SAMPLE_YEAR_WORKERS", "3")))
 ENV_SAMPLE_PARAM_WORKERS = max(1, int(os.getenv("ENV_SAMPLE_PARAM_WORKERS", "3")))
+ENV_TEST_MODE = os.getenv("ENV_TEST_MODE")
 
 # Envista circuit breaker settings (explicitly exposed)
 ENV_CIRCUIT_THRESHOLD = int(os.getenv("ENV_CIRCUIT_THRESHOLD", "5"))
