@@ -50,7 +50,7 @@ def transform_env_daily(year: str, raw_daily_files: list[Path], unique_monitors:
     
     merged_df = pd.merge(combined, unique_monitors, how = "left", left_on="stationId", right_on="station_id")
 
-    merged_df = merged_df[["data_datetime", "data_channels_name", "data_channels_value", "data_channels_valid", "station_id"]]
+    merged_df = merged_df[["data_datetime", "data_channels_name", "data_channels_value", "data_channels_valid", "stations_tag"]]
 
     transformed_df = merged_df.rename(columns={
         "data_datetime": "date_local", 
@@ -73,6 +73,12 @@ def transform_env_daily(year: str, raw_daily_files: list[Path], unique_monitors:
     transformed_df["observation_percent"] = pd.NA
     transformed_df["first_max_value"] = pd.NA
     transformed_df["first_max_hour"] = pd.NA
+
+    if transformed_df["validity_indicator"] == True:
+        transformed_df["validity_indicator"] = "Y"
+    
+    if transformed_df["validity_indicator"] == False:
+        transformed_df["validity_indicator"] = "N"
 
     final_df = calculate_aqi(transformed_df)
 
