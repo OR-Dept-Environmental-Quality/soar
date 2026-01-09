@@ -48,6 +48,7 @@ def transform_env_daily(year: str, raw_daily_files: list[Path], unique_monitors:
     if combined.empty:
         return pd.DataFrame()
     
+    combined = combined[combined["data_channels_value"] != "-9999"]
     merged_df = pd.merge(combined, unique_monitors, how = "left", left_on="stationId", right_on="station_id")
 
     merged_df = merged_df[["data_datetime", "data_channels_name", "data_channels_value", "data_channels_valid", "stations_tag"]]
