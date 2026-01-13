@@ -237,16 +237,12 @@ def _process_parameter_for_year(
         return param_label, 0, False, error_msg
 
 
-def _log_skipped_parameters(
-    skipped_params: list[dict], service: str, year: str
-) -> None:
+def _log_skipped_parameters(skipped_params: list[dict]) -> None:
     """Log skipped/failed parameters to CSV file in logs directory.
     
     Args:
         skipped_params: List of dicts with keys: param_code, param_label, group_store,
                        year, service, error_message, timestamp
-        service: Service name (sample, annual, daily)
-        year: Year being processed
     """
     if not skipped_params:
         return

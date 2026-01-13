@@ -101,8 +101,8 @@ def _open_circuit() -> None:
     state = _read_health()
     state["consecutive_failures"] = state.get("consecutive_failures", 0) + 1
     # Only set opened_at when we actually hit the threshold
-    if state["consecutive_failures"] >= _CIRCUIT_THRESHOLD:
-        state["opened_at"] = datetime.utcnow().isoformat()
+    if state["consecutive_failures"] >= _CIRCUIT_THRESHOLD and not state.get("opened_at"):
+        state["opened_at"] = datetime.now(datetime.timezone.utc).isoformat()
         print(f"\n⚠️  CIRCUIT BREAKER OPENED after {state['consecutive_failures']} consecutive failures")
         print(f"   Will block requests for {_CIRCUIT_COOLDOWN}s to prevent hammering AQS\n")
     _write_health(state)
@@ -214,7 +214,7 @@ def fetch_json(session: requests.Session, url: str) -> dict:
             _reset_circuit()
             try:
                 return resp.json()
-            except (ValueError, json.JSONDecodeError) as json_exc:
+            except ValueError as json_exc:
                 # AQS returned invalid JSON - treat as transient error
                 if attempt < _AQS_RETRIES:
                     print(f"  ⚠️  Invalid JSON response, retrying {attempt+1}/{_AQS_RETRIES}")
@@ -255,7 +255,7 @@ def fetch_json(session: requests.Session, url: str) -> dict:
     # all retries exhausted
     if last_exc:
         print(f"  💥 All retries exhausted, giving up on this request")
-    raise last_exc
+    raise RuntimeError("All retries exhausted with no recorded exception")
 
 
 def fetch_df(session: requests.Session, url: str) -> pd.DataFrame:
