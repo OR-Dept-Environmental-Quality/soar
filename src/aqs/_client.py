@@ -11,7 +11,7 @@ import json
 import time
 from collections import deque
 from collections.abc import Iterator
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
 from threading import Lock
 from typing import Tuple
@@ -102,7 +102,7 @@ def _open_circuit() -> None:
     state["consecutive_failures"] = state.get("consecutive_failures", 0) + 1
     # Only set opened_at when we actually hit the threshold
     if state["consecutive_failures"] >= _CIRCUIT_THRESHOLD and not state.get("opened_at"):
-        state["opened_at"] = datetime.now(datetime.timezone.utc).isoformat()
+        state["opened_at"] = datetime.now(timezone.utc).isoformat()
         print(f"\n⚠️  CIRCUIT BREAKER OPENED after {state['consecutive_failures']} consecutive failures")
         print(f"   Will block requests for {_CIRCUIT_COOLDOWN}s to prevent hammering AQS\n")
     _write_health(state)
@@ -128,7 +128,7 @@ def circuit_is_open() -> bool:
     if failures < _CIRCUIT_THRESHOLD:
         return False
     # if still within cooldown window, circuit remains open
-    if datetime.utcnow() < opened + timedelta(seconds=_CIRCUIT_COOLDOWN):
+    if datetime.now(timezone.utc) < opened + timedelta(seconds=_CIRCUIT_COOLDOWN):
         return True
     # cooldown expired — allow a probe (caller should attempt a single check)
     return False
