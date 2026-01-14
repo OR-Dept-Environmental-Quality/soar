@@ -38,6 +38,29 @@ def _sanitize_filename(name: str, max_len: int = 80) -> str:
     return s
 
 
+def _iter_sample_chunks(
+    bdate: date | str, edate: date | str, months_per_request: int
+):
+    """Yield (bdate, edate) strings for smaller sampleData slices within a year.
+
+    Splitting the year into month-sized windows keeps sampleData/byState
+    responses at manageable sizes so the API does not silently drop data.
+    """
+
+    months_per_request = max(1, months_per_request)
+    start_ts = pd.to_datetime(bdate)
+    end_ts = pd.to_datetime(edate)
+    current_start = start_ts
+    month_offset = pd.DateOffset(months=months_per_request)
+
+    while current_start <= end_ts:
+        chunk_end = current_start + month_offset - pd.Timedelta(days=1)
+        if chunk_end > end_ts:
+            chunk_end = end_ts
+        yield current_start.strftime("%Y%m%d"), chunk_end.strftime("%Y%m%d")
+        current_start = chunk_end + pd.Timedelta(days=1)
+
+
 def fetch_samples_by_state(
     parameter_code: str, bdate: date, edate: date, state_fips: str, session=None
 ):
@@ -62,19 +85,23 @@ def fetch_samples_by_state(
         https://aqs.epa.gov/data/api/sampleData/byState
     """
     session = session or _client.make_session()
-    for b, e in _client.build_year_chunks(bdate, edate):
-        params = {
-            "email": config.AQS_EMAIL or "",
-            "key": config.AQS_KEY or "",
-            "param": parameter_code,
-            "bdate": b,
-            "edate": e,
-            "state": state_fips,
-        }
-        url = f"https://aqs.epa.gov/data/api/sampleData/byState?{urlencode(params)}"
-        df = _client.fetch_df(session, url)
-        year_token = b[:4]  # Extract year from YYYYMMDD format
-        yield year_token, df
+    months_per_request = max(1, int(getattr(config, "SAMPLE_MONTHS_PER_REQUEST", 1)))
+    for year_b, year_e in _client.build_year_chunks(bdate, edate):
+        for chunk_b, chunk_e in _iter_sample_chunks(
+            year_b, year_e, months_per_request
+        ):
+            params = {
+                "email": config.AQS_EMAIL or "",
+                "key": config.AQS_KEY or "",
+                "param": parameter_code,
+                "bdate": chunk_b,
+                "edate": chunk_e,
+                "state": state_fips,
+            }
+            url = f"https://aqs.epa.gov/data/api/sampleData/byState?{urlencode(params)}"
+            df = _client.fetch_df(session, url)
+            year_token = chunk_b[:4]  # Preserve file naming by year
+            yield year_token, df
 
 
 def fetch_samples_for_parameter(
