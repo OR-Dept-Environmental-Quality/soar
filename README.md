@@ -101,6 +101,63 @@ python -m pipelines.aqs.run_monitors
 python -m pipelines.aqs.run_aqs_service
 ```
 
+### AQS Service Extraction: Selecting `group_store`
+
+The AQS service runner reads the list of parameters to extract from `ops/dimPollutant.csv`.
+Each row includes a `group_store` value that controls output file grouping (for example: `pm25`, `ozone`, `pm10`, `co`, `so2`, `no2`, `toxics`).
+
+By default, `run_aqs_service` runs **sample + annual** extraction for all parameters, and runs **daily** extraction for all **non-toxics** parameters.
+
+You can run only a subset of parameters by filtering on `group_store`:
+
+```powershell
+# Run just one group_store
+python -m pipelines.aqs.run_aqs_service --group-store pm25
+
+# Run multiple group_stores (comma-separated)
+python -m pipelines.aqs.run_aqs_service --group-store pm25,ozone
+```
+
+If you are running via the installed entry point (`soar-run-aqs-service`), set the filter via environment variable:
+
+```powershell
+# Equivalent to --group-store pm25,ozone
+$env:AQS_GROUP_STORE = "pm25,ozone"
+soar-run-aqs-service
+```
+
+Output files are written under your `DATAREPO_ROOT` in the raw AQS folders and are split by `group_store`, for example:
+- `raw/aqs/sample/aqs_sample_pm25_YYYY.csv`
+- `raw/aqs/annual/aqs_annual_pm25_YYYY.csv`
+- `raw/aqs/daily/aqs_daily_pm25_YYYY.csv`
+
+Note: daily outputs are not written for `toxics`.
+
+Sample extraction automatically breaks each year into smaller API requests to avoid
+over-sized responses. You can tune the chunk size with the optional
+`SAMPLE_MONTHS_PER_REQUEST` environment variable (default `1`, meaning monthly
+requests). Larger values reduce API calls but risk AQS dropping rows if the
+response becomes too large.
+
+#### Running only certain services
+
+Sometimes you may want to re-run just one portion of the pipeline (for example,
+sample backfills). Use the `--services` flag to pick a subset from
+`sample`, `annual`, `daily`, `transform`:
+
+```powershell
+python -m pipelines.aqs.run_aqs_service --services sample
+python -m pipelines.aqs.run_aqs_service --services sample,daily --group-store pm25
+```
+
+When invoking the installed command (`soar-run-aqs-service`), configure
+`AQS_SERVICES` similarly:
+
+```powershell
+$env:AQS_SERVICES = "sample"
+soar-run-aqs-service
+```
+
 Or use the installed command-line tools (if you ran `pip install -e .`):
 ```powershell
 soar-run-metadata
@@ -146,7 +203,7 @@ python -c "import pipelines.aqs.run_monitors; help(pipelines.aqs.run_monitors)"
    - `staged/aqs/` - Analytics-ready data
 
 3. Check the AQS parameters file:
-   - Open `ops/parameters.csv` to see available parameters
+   - Open `ops/dimPollutant.csv` to see available parameters and their `group_store`
 
 ## Getting Help
 

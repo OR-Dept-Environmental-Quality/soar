@@ -73,6 +73,11 @@ SAMPLE_FALLBACK_ROW_THRESHOLD = int(
     os.getenv("SAMPLE_FALLBACK_ROW_THRESHOLD", "200000")
 )
 
+# Month span for each sampleData/byState request (smaller chunks avoid oversized responses)
+SAMPLE_MONTHS_PER_REQUEST = max(
+    1, int(os.getenv("SAMPLE_MONTHS_PER_REQUEST", "1"))
+)
+
 # HTTP and concurrency tuning for AQS clients
 AQS_TIMEOUT = int(os.getenv("AQS_TIMEOUT", "120"))
 AQS_RETRIES = int(os.getenv("AQS_RETRIES", "6"))

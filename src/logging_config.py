@@ -4,6 +4,7 @@ Provides structured logging with configurable levels, JSON formatting for produc
 and human-readable formatting for development.
 """
 
+import copy
 import logging
 import logging.config
 from pathlib import Path
@@ -82,7 +83,18 @@ def setup_logging(
         verbose: Enable verbose output (DEBUG level)
     """
     # Apply configuration parameters to logging config
-    config = LOGGING_CONFIG.copy()
+    config = copy.deepcopy(LOGGING_CONFIG)
+
+    # Avoid hard dependency on pythonjsonlogger. dictConfig resolves formatter
+    # classes at configuration time, even if a formatter is never used.
+    if json_format:
+        try:
+            import pythonjsonlogger.jsonlogger  # noqa: F401
+        except ModuleNotFoundError:
+            json_format = False
+            config["formatters"].pop("json", None)
+    else:
+        config["formatters"].pop("json", None)
 
     # Set log level
     if verbose:
