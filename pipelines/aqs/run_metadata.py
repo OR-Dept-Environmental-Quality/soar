@@ -28,15 +28,15 @@ from loaders.filesystem import write_csv
 
 RAW_PARQUET = config.RAW_AQS_MONITORS / "monitors_raw.parquet"
 RAW_CSV = config.RAW_AQS_MONITORS / "monitors_raw.csv"
-CURATED_PARQUET = config.TRANS / "monitors_curated.parquet"
-CURATED_CSV = config.TRANS / "monitors_curated.csv"
+CURATED_PARQUET = config.TRANS_MONITORS / "monitors_curated.parquet"
+CURATED_CSV = config.TRANS_MONITORS / "monitors_curated.csv"
 STAGED_PARQUET = config.STAGED / "monitors_staged.parquet"
 STAGED_CSV = config.STAGED / "monitors_staged.csv"
 
 
 def run() -> None:
     """Execute the metadata (monitors) pipeline end-to-end."""
-    config.ensure_dirs(config.RAW_AQS_MONITORS, config.TRANS, config.STAGED)
+    config.ensure_dirs(config.RAW_AQS_MONITORS, config.TRANS_MONITORS, config.STAGED)
     config.set_aqs_credentials()
 
     # Short-circuit if AQS is currently marked unhealthy by the circuit-breaker

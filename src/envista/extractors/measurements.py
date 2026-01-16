@@ -17,7 +17,7 @@ import requests
 
 from config import ENV_KEY, ENV_URL, ENV_USER
 from logging_config import get_logger
-from . import _env_client
+from .. import _env_client
 
 logger = get_logger(__name__)
 
@@ -150,7 +150,7 @@ def get_envista_daily(station_id: str, channel_id: str, from_date: str, to_date:
             return None
         
         # Append station_id
-        env_daily_df['station_Id'] = station_id
+        env_daily_df['stationId'] = station_id
 
         # Fully unnest the DataFrame to handle nested structures
         env_daily_df = _fully_unnest_dataframe(env_daily_df)
