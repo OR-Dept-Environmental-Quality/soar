@@ -577,7 +577,7 @@ def run(
         config.RAW_AQS_ANNUAL,
         config.RAW_AQS_DAILY,
         config.TRANS_MONITORS, 
-        config.STAGED
+        config.STAGED,
         config.CTL_DIR,
     )
     config.set_aqs_credentials()

@@ -48,11 +48,12 @@ def transform_env_daily(year: str, raw_daily_files: list[Path], unique_monitors:
     if combined.empty:
         return pd.DataFrame()
     
+    # Join monitor data with measurement data
     combined = combined[combined["data_channels_value"] != -9999]
     merged_df = pd.merge(combined, unique_monitors, how = "left", left_on="stationId", right_on="station_id")
 
+    # Select and rename columns
     merged_df = merged_df[["data_datetime", "data_channels_name", "data_channels_value", "data_channels_valid", "stations_tag"]]
-
     transformed_df = merged_df.rename(columns={
         "data_datetime": "date_local", 
         "data_channels_name":"method", 
@@ -60,23 +61,26 @@ def transform_env_daily(year: str, raw_daily_files: list[Path], unique_monitors:
         "data_channels_valid":"validity_indicator",
         "stations_tag":"site_code"})
     
-    transformed_df["poc"] = "99"
-    transformed_df["parameter_code"] = "88502"
-    transformed_df["parameter"] = "Acceptable PM2.5 AQI & Speciation Mass"
-    transformed_df["sample_duration_code"] = "1"
-    transformed_df["sample_duration"] = "1 HOUR"
-    transformed_df["units_of_measure"] = "Micrograms per cubic meter"
-    transformed_df["event_type"] = "No Events"
-    transformed_df["method_code"] = "999"
-    transformed_df["method"] = "SensOR PM2.5 Monitor"
+    # Add and populate columns to match AQS schema
+    transformed_df["poc"] = "99" # Dummy value to distinguish from AQS data
+    transformed_df["parameter_code"] = "88502" # True AQS code for non-regulatory PM2.5 data
+    transformed_df["parameter"] = "Acceptable PM2.5 AQI & Speciation Mass" # True AQS description for non-regulatory PM2.5 data
+    transformed_df["sample_duration_code"] = "X" #True AQS code for calculated daily PM2.5 
+    transformed_df["sample_duration"] = "24-HR BLK AVG" # True AQS description for calculated daily PM2.5 data
+    transformed_df["units_of_measure"] = "Micrograms per cubic meter" # True AQS units for PM2.5 data
+    transformed_df["event_type"] = "No Events" # True AQS default for days impacted by exceptional events; not applicable to non-regulatory data
+    transformed_df["method_code"] = "999" # Dummy value to distinguish from AQS data
+    transformed_df["method"] = "SensOR PM2.5 Monitor" # Custom description for PM2.5 data from SensOR
     transformed_df["aqi"] = pd.NA
     transformed_df["observation_count"] = pd.NA
     transformed_df["observation_percent"] = pd.NA
     transformed_df["first_max_value"] = pd.NA
     transformed_df["first_max_hour"] = pd.NA
 
+    # Map validity indicator from boolean to "Y"/"N"
     transformed_df["validity_indicator"] = transformed_df["validity_indicator"].map({True: "Y", False: "N"})
 
+    # Calculate AQI values
     final_df = calculate_aqi(transformed_df)
 
     return final_df[["parameter_code", "poc", "parameter", "sample_duration_code", "sample_duration", 
