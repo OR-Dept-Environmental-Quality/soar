@@ -36,21 +36,30 @@ def consolidate_criteria_daily_for_year(year: str, transform_dir: Path) -> pd.Da
     Returns:
         Consolidated DataFrame with criteria daily fact data
     """
-    # Read the transformed data for this year
-    input_file = transform_dir / f"aqi_aqs_daily_{year}.csv"
-    if not input_file.exists():
-        print(f"⚠️  No AQI daily file found for year {year}: {input_file}")
+    # Read the transformed data for this year using glob pattern
+    matching_files = list(transform_dir.glob(f"*aqi*{year}.csv"))
+    
+    if not matching_files:
+        print(f"⚠️  No AQI daily files found for year {year} in {transform_dir}")
         return pd.DataFrame()
 
-    try:
-        df = pd.read_csv(input_file)
-    except Exception as e:
-        print(f"❌ Error reading {input_file}: {e}")
+    dfs = []
+    for input_file in matching_files:
+        try:
+            df = pd.read_csv(input_file)
+            if not df.empty:
+                dfs.append(df)
+                print(f"✓ Read {len(df)} rows from {input_file.name}")
+            else:
+                print(f"⚠️  Empty AQI daily file: {input_file.name}")
+        except Exception as e:
+            print(f"❌ Error reading {input_file}: {e}")
+    
+    if not dfs:
+        print(f"⚠️  No valid AQI daily data found for year {year}")
         return pd.DataFrame()
-
-    if df.empty:
-        print(f"⚠️  Empty AQI daily file for year {year}")
-        return pd.DataFrame()
+    
+    df = pd.concat(dfs, ignore_index=True)
 
     # Define the required columns for fct_criteria_daily fact table
     # Geographic fields (latitude, longitude, county) are excluded as they belong in dim_sites
