@@ -31,6 +31,7 @@ def run():
     raw_monitors_dir = config.RAW_ENV_MONITORS
     raw_daily_dir = config.RAW_ENV_DAILY
     trans_daily_dir = config.TRANS_DAILY
+    trans_aqi_dir = config.TRANS_AQI
 
     if not raw_monitors_dir.exists():
         print(f"Raw monitors directory not found: {raw_monitors_dir}")
@@ -64,11 +65,17 @@ def run():
             print(f"No data for year {year_str}, skipping")
             continue
 
-        # Write to transform layer
-        output_path = trans_daily_dir / f"envista_daily_{year_str}.csv"
-        write_csv(transform_daily_df, output_path)
+        # Write to daily transform layer
+        daily_output_path = trans_daily_dir / f"envista_daily_{year_str}.csv"
+        write_csv(transform_daily_df, daily_output_path)
 
-        print(f"Wrote {len(transform_daily_df)} AQI records to {output_path}")
+        print(f"Wrote {len(transform_daily_df)} daily records to {daily_output_path}")
+
+        # Write to AQI transform layer
+        aqi_output_path = trans_aqi_dir / f"envista_aqi_{year_str}.csv"
+        write_csv(transform_daily_df, aqi_output_path)
+        
+        print(f"Wrote {len(transform_daily_df)} AQI records to {aqi_output_path}")
 
         years_processed += 1
         total_records += len(transform_daily_df)
