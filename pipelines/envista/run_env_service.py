@@ -30,7 +30,7 @@ from envista.extractors.monitors import extract_envista_station_data
 from envista.extractors.measurements import get_envista_hourly, get_envista_daily
 
 
-ENV_TEST_MODE = config.ENV_TEST_MODE
+ENV_TEST_MODE = str(str(config.ENV_TEST_MODE).lower() in ("1", "true", "yes"))
 ENV_MONITOR_DIR = config.RAW_ENV_MONITORS
 ENV_SAMPLE_DIR = config.RAW_ENV_SAMPLE
 ENV_DAILY_DIR = config.RAW_ENV_DAILY
