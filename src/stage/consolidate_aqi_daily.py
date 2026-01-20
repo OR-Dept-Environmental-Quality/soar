@@ -57,27 +57,41 @@ def get_aqi_category(aqi_value: float, categories_df: pd.DataFrame) -> str:
 def consolidate_aqi_daily_for_year(year: str, transform_dir: Path, categories_df: pd.DataFrame) -> pd.DataFrame:
     """Consolidate AQI daily data for a specific year.
 
-    Reads the transformed AQI daily data, consolidates multiple pollutants per site/date
+    Reads multiple transformed AQI daily data files, consolidates multiple pollutants per site/date
     into a single record with overall AQI as the maximum of pollutant AQIs.
 
     Args:
         year: Year string (e.g., "2023")
         transform_dir: Directory containing transformed AQI daily files
+        categories_df: DataFrame with AQI category definitions
 
     Returns:
         Consolidated DataFrame with one row per site per date
     """
-    # Read the transformed data for this year
-    input_file = transform_dir / f"aqi_aqs_daily_{year}.csv"
-    if not input_file.exists():
-        print(f"⚠️  No transformed AQI file found for year {year}: {input_file}")
+    # Read multiple transformed data files for this year
+    input_pattern = f"aqi*{year}.csv"
+    matching_files = list(transform_dir.glob(input_pattern))
+    
+    if not matching_files:
+        print(f"⚠️  No transformed AQI files found for year {year} matching pattern: {input_pattern}")
         return pd.DataFrame()
 
-    try:
-        df = pd.read_csv(input_file)
-    except Exception as e:
-        print(f"❌ Error reading {input_file}: {e}")
+    # Read and concatenate all matching files
+    dfs = []
+    for input_file in matching_files:
+        try:
+            df = pd.read_csv(input_file)
+            dfs.append(df)
+            print(f"✅ Read {len(df)} records from {input_file.name}")
+        except Exception as e:
+            print(f"❌ Error reading {input_file}: {e}")
+            continue
+    
+    if not dfs:
+        print(f"❌ Failed to read any AQI files for year {year}")
         return pd.DataFrame()
+    
+    df = pd.concat(dfs, ignore_index=True)
 
     if df.empty:
         print(f"⚠️  Empty AQI file for year {year}")
@@ -106,12 +120,12 @@ def consolidate_aqi_daily_for_year(year: str, transform_dir: Path, categories_df
         print(f"⚠️  No recognized pollutants for year {year}")
         return pd.DataFrame()
 
-    # For PM25 with multiple parameters, select the one with higher arithmetic_mean
+    # For PM25 with multiple parameters, select the one with the lowest POC value
     pm25_df = df[df['pollutant'] == 'pm25'].copy()
     if not pm25_df.empty:
-        # Group by site_code, date_local and select the row with max arithmetic_mean
+        # Group by site_code, date_local and select the row with min poc
         pm25_consolidated = pm25_df.loc[
-            pm25_df.groupby(['site_code', 'date_local'])['arithmetic_mean'].idxmax()
+            pm25_df.groupby(['site_code', 'date_local'])['poc'].idxmin()
         ]
     else:
         pm25_consolidated = pd.DataFrame()
@@ -230,7 +244,7 @@ def run_consolidation():
             continue
 
         # Write to staged layer
-        output_path = staged_dir / f"aqi_aqs_daily_{year_str}.csv"
+        output_path = staged_dir / f"aqi_daily_{year_str}.csv"
         consolidated_df.to_csv(output_path, index=False)
 
         print(f"✅ Wrote {len(consolidated_df)} consolidated AQI records to {output_path}")
