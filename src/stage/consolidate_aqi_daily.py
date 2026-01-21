@@ -67,16 +67,26 @@ def consolidate_aqi_daily_for_year(year: str, transform_dir: Path, categories_df
     Returns:
         Consolidated DataFrame with one row per site per date
     """
-    # Read the transformed data for this year
-    input_file = transform_dir / f"aqi_aqs_daily_{year}.csv"
-    if not input_file.exists():
-        print(f"⚠️  No transformed AQI file found for year {year}: {input_file}")
+    # Read all transformed data files for this year (both AQS and Envista)
+    import glob
+    pattern = str(transform_dir / f"*aqi*{year}.csv")
+    input_files = glob.glob(pattern)
+    
+    if not input_files:
+        print(f"⚠️  No transformed AQI files found for year {year} matching pattern: {pattern}")
         return pd.DataFrame()
-
+    
+    print(f"   Found {len(input_files)} file(s) for year {year}")
+    
+    # Read and concatenate all files
+    dfs = []
     try:
-        df = pd.read_csv(input_file)
+        for input_file in input_files:
+            df_temp = pd.read_csv(input_file)
+            dfs.append(df_temp)
+        df = pd.concat(dfs, ignore_index=True)
     except Exception as e:
-        print(f"❌ Error reading {input_file}: {e}")
+        print(f"❌ Error reading files for year {year}: {e}")
         return pd.DataFrame()
 
     if df.empty:
@@ -106,13 +116,32 @@ def consolidate_aqi_daily_for_year(year: str, transform_dir: Path, categories_df
         print(f"⚠️  No recognized pollutants for year {year}")
         return pd.DataFrame()
 
-    # For PM25 with multiple parameters, select the one with higher arithmetic_mean
+    # For PM25 with multiple parameters, apply priority hierarchy:
+    # Priority 1: parameter_code 88101 (FRM/FEM)
+    # Priority 2: parameter_code 88502 with POC != 99 (non-FRM/FEM AQS monitors)
+    # Priority 3: parameter_code 88502 with POC == 99 (Envista sensors)
+    # Within same priority, select highest arithmetic_mean
     pm25_df = df[df['pollutant'] == 'pm25'].copy()
     if not pm25_df.empty:
-        # Group by site_code, date_local and select the row with max arithmetic_mean
-        pm25_consolidated = pm25_df.loc[
-            pm25_df.groupby(['site_code', 'date_local'])['arithmetic_mean'].idxmax()
-        ]
+        # Assign priority levels
+        def assign_pm25_priority(row):
+            if row['parameter_code'] == 88101:
+                return 1  # Highest priority
+            elif row['parameter_code'] == 88502 and row['poc'] != 99:
+                return 2  # Medium priority
+            elif row['parameter_code'] == 88502 and row['poc'] == 99:
+                return 3  # Lowest priority (Envista)
+            else:
+                return 999  # Unknown, shouldn't happen
+        
+        pm25_df['priority'] = pm25_df.apply(assign_pm25_priority, axis=1)
+        
+        # Sort by priority (ascending), then arithmetic_mean (descending)
+        pm25_df = pm25_df.sort_values(['priority', 'arithmetic_mean'], ascending=[True, False])
+        
+        # Group by site_code, date_local and select first row (highest priority, then highest mean)
+        pm25_consolidated = pm25_df.groupby(['site_code', 'date_local']).first().reset_index()
+        pm25_consolidated = pm25_consolidated.drop(columns=['priority'])
     else:
         pm25_consolidated = pd.DataFrame()
 
@@ -152,6 +181,11 @@ def consolidate_aqi_daily_for_year(year: str, transform_dir: Path, categories_df
         result = result.merge(pm25_cols, on=['site_code', 'date_local'], how='left')
 
     # Calculate overall AQI as maximum of pollutant-specific AQI values
+    # Ensure both columns exist before calculating
+    for col in ['ozone_aqi', 'pm25_aqi']:
+        if col not in result.columns:
+            result[col] = np.nan
+    
     # Use np.nanmax to handle cases where only one pollutant is present
     result['aqi'] = result[['ozone_aqi', 'pm25_aqi']].apply(lambda row: np.nanmax(row.values), axis=1)
 
