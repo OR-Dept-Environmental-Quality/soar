@@ -65,11 +65,6 @@ def run():
             print(f"No data for year {year_str}, skipping")
             continue
 
-        # Write to daily transform layer
-        daily_output_path = trans_daily_dir / f"envista_daily_{year_str}.csv"
-        write_csv(transform_daily_df, daily_output_path)
-        print(f"Wrote {len(transform_daily_df)} daily records to {daily_output_path}")
-
         # Write to AQI transform layer
         aqi_output_path = trans_aqi_dir / f"envista_aqi_{year_str}.csv"
         write_csv(transform_daily_df, aqi_output_path)
