@@ -66,7 +66,7 @@ def run():
             continue
 
         # Write to AQI transform layer
-        aqi_output_path = trans_aqi_dir / f"envista_aqi_{year_str}.csv"
+        aqi_output_path = trans_aqi_dir / f"aqi_envista_daily_{year_str}.csv"
         write_csv(transform_daily_df, aqi_output_path)
         print(f"Wrote {len(transform_daily_df)} AQI records to {aqi_output_path}")
 
