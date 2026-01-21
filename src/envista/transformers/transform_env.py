@@ -61,6 +61,9 @@ def transform_env_daily(year: str, raw_daily_files: list[Path], unique_monitors:
         "data_channels_valid":"validity_indicator",
         "stations_tag":"site_code"})
     
+    # Standardize date_local format to match AQS (YYYY-MM-DD)
+    transformed_df["date_local"] = pd.to_datetime(transformed_df["date_local"]).dt.strftime("%Y-%m-%d")
+    
     # Add and populate columns to match AQS schema
     transformed_df["poc"] = "99" # Dummy value to distinguish from AQS data
     transformed_df["parameter_code"] = "88502" # True AQS code for non-regulatory PM2.5 data
