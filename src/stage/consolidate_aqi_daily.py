@@ -67,22 +67,32 @@ def consolidate_aqi_daily_for_year(year: str, transform_dir: Path, categories_df
     Returns:
         Consolidated DataFrame with one row per site per date
     """
-    # Read the transformed data for this year
-    input_file = transform_dir / f"aqi_aqs_daily_{year}.csv"
-    if not input_file.exists():
-        print(f"⚠️  No transformed AQI file found for year {year}: {input_file}")
+    # Read all transformed data files for this year (both AQS and Envista)
+    import glob
+    pattern = str(transform_dir / f"*aqi*{year}.csv")
+    input_files = glob.glob(pattern)
+
+    if not input_files:
+        print(f"⚠️  No transformed AQI files found for year {year} matching pattern: {pattern}")
         return pd.DataFrame()
 
+    print(f"   Found {len(input_files)} file(s) for year {year}")
+
+    # Read and concatenate all files
+    dfs = []
     try:
-        df = pd.read_csv(input_file)
+        for input_file in input_files:
+            df_temp = pd.read_csv(input_file)
+            dfs.append(df_temp)
+        df = pd.concat(dfs, ignore_index=True)
     except Exception as e:
-        print(f"❌ Error reading {input_file}: {e}")
+        print(f"❌ Error reading files for year {year}: {e}")
         return pd.DataFrame()
 
     if df.empty:
         print(f"⚠️  Empty AQI file for year {year}")
         return pd.DataFrame()
-
+    
     # Filter only valid records (validity_indicator == 'Y')
     df = df[df['validity_indicator'] == 'Y'].copy()
 
