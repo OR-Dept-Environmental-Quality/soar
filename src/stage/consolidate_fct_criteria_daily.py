@@ -36,20 +36,35 @@ def consolidate_criteria_daily_for_year(year: str, transform_dir: Path) -> pd.Da
     Returns:
         Consolidated DataFrame with criteria daily fact data
     """
-    # Read the transformed data for this year
-    input_file = transform_dir / f"aqi_aqs_daily_{year}.csv"
-    if not input_file.exists():
-        print(f"⚠️  No AQI daily file found for year {year}: {input_file}")
+    # Find all transformed data files matching the pattern for this year
+    pattern = f"*aqi*{year}.csv"
+    matching_files = list(transform_dir.glob(pattern))
+    
+    if not matching_files:
+        print(f"⚠️  No AQI daily files found for year {year} matching pattern: {pattern}")
         return pd.DataFrame()
 
-    try:
-        df = pd.read_csv(input_file)
-    except Exception as e:
-        print(f"❌ Error reading {input_file}: {e}")
+    print(f"   📂 Found {len(matching_files)} file(s) matching pattern for {year}")
+    
+    dfs = []
+    for input_file in matching_files:
+        try:
+            file_df = pd.read_csv(input_file)
+            print(f"   ✓ Read {len(file_df)} records from {input_file.name}")
+            dfs.append(file_df)
+        except Exception as e:
+            print(f"❌ Error reading {input_file}: {e}")
+            continue
+    
+    if not dfs:
+        print(f"⚠️  No files were successfully read for year {year}")
         return pd.DataFrame()
-
+    
+    # Combine all dataframes
+    df = pd.concat(dfs, ignore_index=True)
+    
     if df.empty:
-        print(f"⚠️  Empty AQI daily file for year {year}")
+        print(f"⚠️  All combined files are empty for year {year}")
         return pd.DataFrame()
 
     # Define the required columns for fct_criteria_daily fact table
