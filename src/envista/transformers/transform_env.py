@@ -65,14 +65,14 @@ def transform_env_daily(year: str, raw_daily_files: list[Path], unique_monitors:
     transformed_df["date_local"] = pd.to_datetime(transformed_df["date_local"]).dt.strftime("%Y-%m-%d")
     
     # Add and populate columns to match AQS schema
-    transformed_df["poc"] = "99" # Dummy value to distinguish from AQS data
-    transformed_df["parameter_code"] = "88502" # True AQS code for non-regulatory PM2.5 data
+    transformed_df["poc"] = 99 # Dummy value to distinguish from AQS data
+    transformed_df["parameter_code"] = 88502 # True AQS code for non-regulatory PM2.5 data
     transformed_df["parameter"] = "Acceptable PM2.5 AQI & Speciation Mass" # True AQS description for non-regulatory PM2.5 data
     transformed_df["sample_duration_code"] = "X" #True AQS code for calculated daily PM2.5 
     transformed_df["sample_duration"] = "24-HR BLK AVG" # True AQS description for calculated daily PM2.5 data
     transformed_df["units_of_measure"] = "Micrograms per cubic meter" # True AQS units for PM2.5 data
     transformed_df["event_type"] = "No Events" # True AQS default for days impacted by exceptional events; not applicable to non-regulatory data
-    transformed_df["method_code"] = "999" # Dummy value to distinguish from AQS data
+    transformed_df["method_code"] = 999 # Dummy value to distinguish from AQS data
     transformed_df["method"] = "SensOR PM2.5 Monitor" # Custom description for PM2.5 data from SensOR
     transformed_df["aqi"] = pd.NA
     transformed_df["observation_count"] = pd.NA
