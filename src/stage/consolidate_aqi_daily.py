@@ -9,6 +9,7 @@ mean concentration to calculate AQI_PM25.
 from __future__ import annotations
 
 import sys
+import glob
 from pathlib import Path
 from typing import Dict, List
 
@@ -35,7 +36,7 @@ def load_aqi_categories() -> pd.DataFrame:
         return pd.DataFrame()
 
 
-def get_aqi_category(aqi_value: float, categories_df: pd.DataFrame) -> str:
+def get_aqi_category(aqi_value: float, categories_df: pd.DataFrame) -> str | None:
     """Determine AQI category based on AQI value."""
     if pd.isna(aqi_value):
         return None
@@ -43,12 +44,12 @@ def get_aqi_category(aqi_value: float, categories_df: pd.DataFrame) -> str:
     # Find the category where low_aqi <= aqi_value <= high_aqi
     for _, row in categories_df.iterrows():
         if row['low_aqi'] <= aqi_value <= row['high_aqi']:
-            return row['aqi_category']
+            return str(row['aqi_category'])
     
     # If no category found (AQI > highest range), assign highest category
     # This handles cases where AQI exceeds the maximum defined range (e.g., >999)
     if not categories_df.empty:
-        highest_category = categories_df.loc[categories_df['low_aqi'].idxmax(), 'aqi_category']
+        highest_category = str(categories_df.loc[categories_df['low_aqi'].idxmax(), 'aqi_category'])
         return highest_category
     
     return None  # Should not happen with valid categories
@@ -68,7 +69,6 @@ def consolidate_aqi_daily_for_year(year: str, transform_dir: Path, categories_df
         Consolidated DataFrame with one row per site per date
     """
     # Read all transformed data files for this year (both AQS and Envista)
-    import glob
     pattern = str(transform_dir / f"*aqi*{year}.csv")
     input_files = glob.glob(pattern)
     
