@@ -67,6 +67,14 @@ def consolidate_criteria_daily_for_year(year: str, transform_dir: Path) -> pd.Da
         print(f"⚠️  All combined files are empty for year {year}")
         return pd.DataFrame()
 
+    # Filter only valid records (validity_indicator == 'Y')
+    # This excludes invalid sensor readings including negative values from Envista
+    df = df[df['validity_indicator'] == 'Y'].copy()
+    
+    if df.empty:
+        print(f"⚠️  No valid records for year {year}")
+        return pd.DataFrame()
+
     # Define the required columns for fct_criteria_daily fact table
     # Geographic fields (latitude, longitude, county) are excluded as they belong in dim_sites
     required_columns = [
