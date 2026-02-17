@@ -142,6 +142,11 @@ def consolidate_aqi_daily_for_year(year: str, transform_dir: Path, categories_df
         # Group by site_code, date_local and select first row (highest priority, then highest mean)
         pm25_consolidated = pm25_df.groupby(['site_code', 'date_local']).first().reset_index()
         pm25_consolidated = pm25_consolidated.drop(columns=['priority'])
+        
+        # Add wildfire tag for PM2.5 measurements >= 35 µg/m³ in July-September
+        pm25_consolidated['date_local_dt'] = pd.to_datetime(pm25_consolidated['date_local'])
+        pm25_consolidated['pm25_wildfire_tag'] = (pm25_consolidated['date_local_dt'].dt.month.isin([7, 8, 9])) & (pm25_consolidated['arithmetic_mean'] >= 35)
+        pm25_consolidated = pm25_consolidated.drop(columns=['date_local_dt'])
     else:
         pm25_consolidated = pd.DataFrame()
 
@@ -170,7 +175,7 @@ def consolidate_aqi_daily_for_year(year: str, transform_dir: Path, categories_df
 
     # Merge PM25 data
     if not pm25_consolidated.empty:
-        pm25_cols = pm25_consolidated[['site_code', 'date_local', 'poc', 'observation_percent', 'validity_indicator', 'aqi']].rename(
+        pm25_cols = pm25_consolidated[['site_code', 'date_local', 'poc', 'observation_percent', 'validity_indicator', 'aqi', 'pm25_wildfire_tag']].rename(
             columns={
                 'poc': 'pm25_poc',
                 'observation_percent': 'pm25_observation_percent',
@@ -206,7 +211,8 @@ def consolidate_aqi_daily_for_year(year: str, transform_dir: Path, categories_df
         'pm25_poc',
         'pm25_observation_percent',
         'pm25_validity_indicator',
-        'pm25_aqi'
+        'pm25_aqi',
+        'pm25_wildfire_tag'
     ]
 
     # Ensure all columns exist (fill missing with NaN)
@@ -216,7 +222,8 @@ def consolidate_aqi_daily_for_year(year: str, transform_dir: Path, categories_df
 
     result = result[final_columns]
 
-    # Filter out records without valid AQI values
+    # Fill missing wildfire tag with False
+    result['pm25_wildfire_tag'] = result['pm25_wildfire_tag'].fillna(False)
     result = result.dropna(subset=['aqi'])
 
     # Ensure uniqueness by site_code and date_local
