@@ -264,7 +264,7 @@ def run_consolidation():
             continue
 
         # Write to staged layer
-        output_path = staged_dir / f"aqi_aqs_daily_{year_str}.csv"
+        output_path = staged_dir / f"fct_aqi_daily_{year_str}.csv"
         consolidated_df.to_csv(output_path, index=False)
 
         print(f"✅ Wrote {len(consolidated_df)} consolidated AQI records to {output_path}")
