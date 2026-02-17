@@ -426,6 +426,123 @@ class TestPM25PriorityHierarchy:
         assert site1_date2['aqi'] == 100
 
 
+class TestPM25WildfireTag:
+    """Test suite for PM2.5 wildfire tag logic."""
+
+    def test_wildfire_tag_summer_high_pm25(self, tmp_path):
+        """Test wildfire tag is True for PM2.5 >= 35 µg/m³ in July-September."""
+        data = [
+            {
+                "site_code": "SITE001",
+                "date_local": "2024-07-15",  # July
+                "parameter_code": 88101,
+                "poc": 1,
+                "arithmetic_mean": 40.0,  # >= 35
+                "aqi": 120,
+                "observation_percent": 100,
+                "validity_indicator": "Y",
+                "event_type": "No Events",
+                "pollutant": "pm25"
+            }
+        ]
+        df = pd.DataFrame(data)
+        categories_df = pd.DataFrame({
+            'aqi_category': ['Good', 'Moderate', 'Unhealthy for Sensitive Groups'],
+            'low_aqi': [0, 51, 101],
+            'high_aqi': [50, 100, 150]
+        })
+        
+        result = consolidate_aqi_daily_for_year("2024", tmp_path, categories_df)
+        
+        assert not result.empty
+        assert 'pm25_wildfire_tag' in result.columns
+        assert result.iloc[0]['pm25_wildfire_tag'] == True
+
+    def test_wildfire_tag_summer_low_pm25(self, tmp_path):
+        """Test wildfire tag is False for PM2.5 < 35 µg/m³ in July-September."""
+        data = [
+            {
+                "site_code": "SITE001",
+                "date_local": "2024-08-15",  # August
+                "parameter_code": 88101,
+                "poc": 1,
+                "arithmetic_mean": 20.0,  # < 35
+                "aqi": 60,
+                "observation_percent": 100,
+                "validity_indicator": "Y",
+                "event_type": "No Events",
+                "pollutant": "pm25"
+            }
+        ]
+        df = pd.DataFrame(data)
+        categories_df = pd.DataFrame({
+            'aqi_category': ['Good', 'Moderate'],
+            'low_aqi': [0, 51],
+            'high_aqi': [50, 100]
+        })
+        
+        result = consolidate_aqi_daily_for_year("2024", tmp_path, categories_df)
+        
+        assert not result.empty
+        assert result.iloc[0]['pm25_wildfire_tag'] == False
+
+    def test_wildfire_tag_winter_high_pm25(self, tmp_path):
+        """Test wildfire tag is False for PM2.5 >= 35 µg/m³ outside July-September."""
+        data = [
+            {
+                "site_code": "SITE001",
+                "date_local": "2024-12-15",  # December
+                "parameter_code": 88101,
+                "poc": 1,
+                "arithmetic_mean": 50.0,  # >= 35
+                "aqi": 150,
+                "observation_percent": 100,
+                "validity_indicator": "Y",
+                "event_type": "No Events",
+                "pollutant": "pm25"
+            }
+        ]
+        df = pd.DataFrame(data)
+        categories_df = pd.DataFrame({
+            'aqi_category': ['Unhealthy for Sensitive Groups', 'Unhealthy'],
+            'low_aqi': [101, 151],
+            'high_aqi': [150, 200]
+        })
+        
+        result = consolidate_aqi_daily_for_year("2024", tmp_path, categories_df)
+        
+        assert not result.empty
+        assert result.iloc[0]['pm25_wildfire_tag'] == False
+
+    def test_wildfire_tag_no_pm25(self, tmp_path):
+        """Test wildfire tag is False when no PM2.5 data is present."""
+        data = [
+            {
+                "site_code": "SITE001",
+                "date_local": "2024-07-15",
+                "parameter_code": 44201,  # Ozone
+                "poc": 1,
+                "arithmetic_mean": 0.05,
+                "aqi": 50,
+                "observation_percent": 100,
+                "validity_indicator": "Y",
+                "event_type": "No Events",
+                "pollutant": "ozone"
+            }
+        ]
+        df = pd.DataFrame(data)
+        categories_df = pd.DataFrame({
+            'aqi_category': ['Good'],
+            'low_aqi': [0],
+            'high_aqi': [50]
+        })
+        
+        result = consolidate_aqi_daily_for_year("2024", tmp_path, categories_df)
+        
+        assert not result.empty
+        assert result.iloc[0]['pm25_wildfire_tag'] == False
+
+
 class TestAQICategoryAssignment:
     """Test suite for AQI category assignment."""
 
