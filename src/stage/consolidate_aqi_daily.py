@@ -12,6 +12,7 @@ import sys
 import glob
 from pathlib import Path
 from typing import Dict, List
+from datetime import datetime
 
 import numpy as np
 import pandas as pd
@@ -145,8 +146,8 @@ def consolidate_aqi_daily_for_year(year: str, transform_dir: Path, categories_df
         
 # Add wildfire tag for PM2.5 measurements >= 25 µg/m³ between June 1 and October 25, excluding July 4
         pm25_consolidated['date_local_dt'] = pd.to_datetime(pm25_consolidated['date_local'])
-        pm25_consolidated['pm25_wildfire_tag'] = ((pm25_consolidated['date_local_dt'] >= '06-01') & 
-                                                  (pm25_consolidated['date_local_dt'] <= '10-25') & 
+        pm25_consolidated['pm25_wildfire_tag'] = ((pm25_consolidated['date_local_dt'].dt.month >= 6) & 
+                                                  ((pm25_consolidated['date_local_dt'].dt.month < 10) | ((pm25_consolidated['date_local_dt'].dt.month == 10) & (pm25_consolidated['date_local_dt'].dt.day <= 25))) & 
                                                   ~((pm25_consolidated['date_local_dt'].dt.month == 7) & (pm25_consolidated['date_local_dt'].dt.day == 4)) & 
                                                   (pm25_consolidated['arithmetic_mean'] >= 25))
     else:
