@@ -161,7 +161,6 @@ def fetch_all_monitors_for_oregon(bdate: date, edate: date) -> pd.DataFrame:
         "43502",
         "44201",
         "45201",
-        "58103",
         "61101",
         "81102",
         "82128",
