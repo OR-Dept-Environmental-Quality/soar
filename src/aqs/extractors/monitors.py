@@ -56,6 +56,10 @@ def _add_site_code(df: pd.DataFrame) -> pd.DataFrame:
     # Clean up temporary columns
     df = df.drop(columns=["state_code_num", "county_code_num", "site_number_num"])
 
+    # Move column
+    col = df.pop("site_code")
+    df.insert(3, "site_code", col)
+
     return df
 
 
