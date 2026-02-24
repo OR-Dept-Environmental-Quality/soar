@@ -77,9 +77,9 @@ def fetch_aqs_response(api_url: str) -> pd.DataFrame:
             # Handle list format: [header, data]
             if isinstance(parsed, list) and len(parsed) > 1:
                 data = parsed[1]
-            # Handle dict format with 'result' key (common in EPA APIs)
-            elif isinstance(parsed, dict) and "result" in parsed:
-                data = parsed["result"]
+            # Handle dict format with 'Data' key (common in EPA APIs)
+            elif isinstance(parsed, dict) and "Data" in parsed:
+                data = parsed["Data"]
             else:
                 data = []
         except (KeyError, IndexError, TypeError) as e:
