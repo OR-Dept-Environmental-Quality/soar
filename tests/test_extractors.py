@@ -4,10 +4,11 @@ from aqs.extractors import monitors
 
 
 def test_build_aqs_requests_splits_years():
+    # build_aqs_requests now takes (parameter_code_list, start_date, end_date)
     urls = monitors.build_aqs_requests(
-        "41", "005", "0001", "88101", "2019-06-01", "2021-03-01"
+        ["88101"], "2019-06-01", "2021-03-01"
     )
-    # expect 3 requests: 2019 (partial), 2020 (full), 2021 (partial)
+    # expect 3 requests: 2019 (partial), 2020 (full), 2021 (partial) for 1 parameter
     assert len(urls) == 3
     assert "bdate=20190601" in urls[0]
     assert "edate=20191231" in urls[0]

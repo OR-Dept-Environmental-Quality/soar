@@ -123,6 +123,9 @@ def circuit_is_open() -> bool:
         return False
     try:
         opened = datetime.fromisoformat(opened_at)
+        # normalize to tz-aware UTC (fromisoformat returns naive on Python <=3.10)
+        if opened.tzinfo is None:
+            opened = opened.replace(tzinfo=timezone.utc)
     except Exception:
         return False
     if failures < _CIRCUIT_THRESHOLD:

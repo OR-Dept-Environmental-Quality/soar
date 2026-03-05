@@ -222,8 +222,10 @@ def consolidate_aqi_daily_for_year(year: str, transform_dir: Path, categories_df
 
     result = result[final_columns]
 
-    # Fill missing wildfire tag with False
-    result['pm25_wildfire_tag'] = result['pm25_wildfire_tag'].fillna(False)
+    # Fill missing wildfire tag with False and cast to bool (avoids pandas downcasting FutureWarning)
+    result['pm25_wildfire_tag'] = result['pm25_wildfire_tag'].where(
+        result['pm25_wildfire_tag'].notna(), other=False
+    ).astype(bool)
     result = result.dropna(subset=['aqi'])
 
     # Ensure uniqueness by site_code and date_local
