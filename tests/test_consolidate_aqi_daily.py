@@ -446,6 +446,7 @@ class TestPM25WildfireTag:
             }
         ]
         df = pd.DataFrame(data)
+        df.to_csv(tmp_path / "aqi_aqs_daily_2024.csv", index=False)
         categories_df = pd.DataFrame({
             'aqi_category': ['Good', 'Moderate', 'Unhealthy for Sensitive Groups'],
             'low_aqi': [0, 51, 101],
@@ -475,6 +476,7 @@ class TestPM25WildfireTag:
             }
         ]
         df = pd.DataFrame(data)
+        df.to_csv(tmp_path / "aqi_aqs_daily_2024.csv", index=False)
         categories_df = pd.DataFrame({
             'aqi_category': ['Good', 'Moderate'],
             'low_aqi': [0, 51],
@@ -503,6 +505,7 @@ class TestPM25WildfireTag:
             }
         ]
         df = pd.DataFrame(data)
+        df.to_csv(tmp_path / "aqi_aqs_daily_2024.csv", index=False)
         categories_df = pd.DataFrame({
             'aqi_category': ['Unhealthy for Sensitive Groups', 'Unhealthy'],
             'low_aqi': [101, 151],
@@ -531,6 +534,7 @@ class TestPM25WildfireTag:
             }
         ]
         df = pd.DataFrame(data)
+        df.to_csv(tmp_path / "aqi_aqs_daily_2024.csv", index=False)
         categories_df = pd.DataFrame({
             'aqi_category': ['Good'],
             'low_aqi': [0],

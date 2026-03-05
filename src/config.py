@@ -20,9 +20,9 @@ AQS_EMAIL = os.getenv("AQS_EMAIL")
 AQS_KEY = os.getenv("AQS_KEY")
 
 # Envista API credentials
-ENV_USER = os.getenv("ENVISTA_USER")
-ENV_KEY = os.getenv("ENVISTA_KEY")
-ENV_URL = os.getenv("ENVISTA_URL")
+ENV_USER = os.getenv("ENV_USER")
+ENV_KEY = os.getenv("ENV_KEY")
+ENV_URL = os.getenv("ENV_URL")
 
 # State FIPS code (zero-padded to 2 digits)
 STATE = (os.getenv("STATE_CODE") or "").zfill(2)

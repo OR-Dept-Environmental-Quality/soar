@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 
 import pytest
 import requests
@@ -57,7 +57,7 @@ def test_reset_circuit_allows_requests(tmp_path, monkeypatch):
         _client, "_health_path", lambda: str(tmp_path / "aqs_health.json")
     )
     # write a health file with high consecutive_failures and recent opened_at
-    now = datetime.utcnow().isoformat()
+    now = datetime.now(timezone.utc).isoformat()
     _client._write_health({"consecutive_failures": 10, "opened_at": now})
     assert _client.circuit_is_open() is True
 
