@@ -646,7 +646,7 @@ def run(
     all_params = list(
         dfp_run[["aqs_parameter", label_col, "group_store_norm"]]
         .dropna()
-        .drop_duplicates(subset=["aqs_parameter"])
+        .drop_duplicates(subset=["aqs_parameter", "group_store_norm"])
         .itertuples(index=False, name=None)
     )
 
@@ -659,7 +659,7 @@ def run(
         dfp_run[dfp_run["group_store_norm"] != "toxics"]
         [["aqs_parameter", label_col, "group_store_norm"]]
         .dropna()
-        .drop_duplicates(subset=["aqs_parameter"])
+        .drop_duplicates(subset=["aqs_parameter", "group_store_norm"])
         .itertuples(index=False, name=None)
     )
 
@@ -683,7 +683,7 @@ def run(
         years = years[:2]
 
     print(f"📅 Processing years: {', '.join(years)}")
-
+        
     # Execute services in consecutive order (extraction only, skip transform)
     try:
         if "sample" in services_to_run:
