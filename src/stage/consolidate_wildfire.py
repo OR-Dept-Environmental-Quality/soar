@@ -159,6 +159,7 @@ def build_daily_table(
         right_on=["site_code", "date_local", "_poc_criteria"],
         how="left",
     ).drop(columns=["_poc_criteria"], errors="ignore")
+    daily = daily.dropna(subset=["pm25_concentration_mean"])
 
     # Date features
     daily["year"]       = daily["date_local"].dt.year
