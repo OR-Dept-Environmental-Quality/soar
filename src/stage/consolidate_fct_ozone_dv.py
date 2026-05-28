@@ -132,7 +132,9 @@ def consolidate_ozone_dv(staged_dir: Path) -> pd.DataFrame:
     # Daily site maximum: collapse across POCs
     daily = (
         df.groupby(["site_code", "date_local", "year"], as_index=False)
-        .agg({"first_max_value": "max"})
+        ["first_max_value"]
+        .max()
+        .reset_index()
         .rename(columns={"first_max_value": "daily_max_8hr_ppm"})
     )
 
@@ -165,7 +167,7 @@ def consolidate_ozone_dv(staged_dir: Path) -> pd.DataFrame:
 
     annual = (
         daily.groupby(["site_code", "year"])
-        .apply(_annual_stats, include_groups=False)
+        .apply(_annual_stats)
         .reset_index()
     )
 
