@@ -142,13 +142,14 @@ def consolidate_aqi_daily_for_year(year: str, transform_dir: Path, categories_df
         # Group by site_code, date_local and select first row (highest priority, then highest mean)
         pm25_consolidated = pm25_df.groupby(['site_code', 'date_local']).first().reset_index()
         pm25_consolidated = pm25_consolidated.drop(columns=['priority'])
-        
-# Add wildfire tag for PM2.5 measurements >= 25 µg/m³ between June 1 and October 25, excluding July 4
+
+        # Wildfire tag: PM2.5 > 15 µg/m³ during Jun 1–Oct 25, excluding Jul 4
         pm25_consolidated['date_local_dt'] = pd.to_datetime(pm25_consolidated['date_local'])
-        pm25_consolidated['pm25_wildfire_tag'] = ((pm25_consolidated['date_local_dt'].dt.month >= 6) & 
-                                                  ((pm25_consolidated['date_local_dt'].dt.month <= 9) | ((pm25_consolidated['date_local_dt'].dt.month == 10) & (pm25_consolidated['date_local_dt'].dt.day <= 25))) & 
-                                                  ~((pm25_consolidated['date_local_dt'].dt.month == 7) & (pm25_consolidated['date_local_dt'].dt.day == 4)) & 
-                                                  (pm25_consolidated['arithmetic_mean'] >= 25))
+        _mmdd = pm25_consolidated['date_local_dt'].dt.month * 100 + pm25_consolidated['date_local_dt'].dt.day
+        pm25_consolidated['pm25_wildfire_tag'] = (
+            (_mmdd >= 601) & (_mmdd <= 1025) & (_mmdd != 704) &
+            (pm25_consolidated['arithmetic_mean'] > 15.0)
+        )
     else:
         pm25_consolidated = pd.DataFrame()
 
