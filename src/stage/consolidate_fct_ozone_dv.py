@@ -36,8 +36,8 @@ OZONE_NAAQS_PPM = 0.070
 # AQS parameter code for ozone
 OZONE_PARAM = 44201
 
-# Valid 8-hour averaging period codes ('W' = 8-hr running, 'Z' = 8-hr block)
-OZONE_DURATION_CODES = {"W", "Z"}
+# Valid 8-hour averaging period codes ('W' = 8-hour average time beginning)
+OZONE_DURATION_CODES = {"W"}
 
 # Earliest year with staged criteria daily data
 DV_START_YEAR = 2005
@@ -132,8 +132,7 @@ def consolidate_ozone_dv(staged_dir: Path) -> pd.DataFrame:
     # Daily site maximum: collapse across POCs
     daily = (
         df.groupby(["site_code", "date_local", "year"], as_index=False)
-        ["first_max_value"]
-        .max()
+        .agg({"first_max_value": "max"})
         .rename(columns={"first_max_value": "daily_max_8hr_ppm"})
     )
 
