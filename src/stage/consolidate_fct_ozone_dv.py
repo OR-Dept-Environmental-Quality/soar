@@ -1,14 +1,14 @@
 """Ozone Design Value Consolidation.
 
-Calculates 8-hour ozone design values per EPA 40 CFR Part 50 Appendix P.
+Calculates 8-hour ozone design values per EPA 40 CFR Part 50 Appendix U.
 
 Algorithm:
-  1. Filter fct_criteria_daily to ozone (44201), 8-hour duration codes ('W', 'Z').
+  1. Filter fct_criteria_daily to ozone (44201), 8-hour duration codes ('W').
   2. Resolve event-type duplicates per (site, date, POC): keep row with highest
      first_max_value (naturally selects 'Events Included' records).
   3. Collapse across POCs: daily site max = max(first_max_value) per (site, date).
   4. Per (site, year): count valid days, tag exceptional-event days, extract
-     1st-5th highest daily max, truncated to 3 decimal places per Appendix P.
+     1st-5th highest daily max, truncated to 3 decimal places per Appendix U.
   5. Rolling 3-year average of the 4th-highest value = design value, also
      truncated to 3 decimal places.
   6. Flag: meets_ozone_naaqs = (dv_3yr_avg_ppm <= 0.070).
