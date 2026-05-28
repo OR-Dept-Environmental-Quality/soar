@@ -62,10 +62,20 @@ def _pm25_aqi_category(series: pd.Series) -> pd.Series:
 
 
 def _wildfire_season_mask(dates: pd.Series) -> pd.Series:
-    """Return boolean mask: True if date falls within wildfire season."""
+    """Return boolean mask: True if date falls within wildfire season.
+    
+    Before 2020: July 1 – Sept 30 (0701–0930)
+    2020 and after: June 1 – Oct 25 (0601–1025)
+    """
     mmdd = dates.dt.month * 100 + dates.dt.day
-    in_window = (mmdd >= SEASON_START_MMDD) & (mmdd <= SEASON_END_MMDD)
+    year = dates.dt.year
     excluded = mmdd.isin(SEASON_EXCLUDE_MMDD)
+    
+    # Apply different date windows based on year
+    before_2020 = (mmdd >= 701) & (mmdd <= 930)
+    from_2020 = (mmdd >= 601) & (mmdd <= 1025)
+    in_window = (year < 2020) & before_2020 | (year >= 2020) & from_2020
+    
     return in_window & ~excluded
 
 
