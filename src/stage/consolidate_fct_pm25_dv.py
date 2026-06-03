@@ -8,7 +8,7 @@ Algorithm:
   2. Priority assignment:
        88101              → priority 1  (FRM/FEM)
        88502, POC != 99   → priority 2  (speciation)
-       88502, POC == 99   → excluded    (Envista continuous monitors)
+       88502, POC == 99   → priority 3  (Envista continuous monitors)
   3. Resolve event-type duplicates per (site, date, POC, param): keep row with
      highest arithmetic_mean (naturally selects 'Events Included' data).
   4. Priority dedup per (site, date): keep lowest priority, then highest mean.
@@ -87,13 +87,15 @@ def _p98_rank(n_creditable: int) -> int:
 def _assign_priority(parameter_code: int, poc: int) -> int:
     """Return numeric priority for PM2.5 DV hierarchy.
 
-    Returns 999 for records that should be excluded (Envista).
+    Priority 1 (FRM/FEM) > Priority 2 (speciation) > Priority 3 (Envista continuous).
     """
     if parameter_code == 88101:
         return 1
     if parameter_code == 88502 and poc != 99:
         return 2
-    return 999  # 88502, POC=99 = Envista continuous → excluded
+    if parameter_code == 88502 and poc == 99:
+        return 3  # 88502, POC=99 = Envista continuous → included as lowest priority
+    return 999  # Unknown/invalid → excluded
 
 
 def _load_criteria_daily(staged_dir: Path, end_year: int) -> pd.DataFrame:
@@ -145,15 +147,12 @@ def consolidate_pm25_dv(staged_dir: Path) -> pd.DataFrame:
     df["poc"] = pd.to_numeric(df["poc"], errors="coerce").fillna(0).astype(int)
     df["parameter_code"] = df["parameter_code"].astype(int)
 
-    # Assign priority; drop Envista (priority 999)
+    # Assign priority
     df["_priority"] = df.apply(
         lambda r: _assign_priority(int(r["parameter_code"]), int(r["poc"])), axis=1
     )
+    # Drop invalid records (priority 999), but keep Envista (priority 3)
     df = df[df["_priority"] < 999].copy()
-
-    if df.empty:
-        print("   ❌ No PM2.5 records after Envista exclusion")
-        return pd.DataFrame()
 
     # ------------------------------------------------------------------ #
     # Exceptional-event flag BEFORE deduplication                         #
