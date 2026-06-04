@@ -252,7 +252,7 @@ def consolidate_pm25_dv(staged_dir: Path) -> pd.DataFrame:
 
     annual = (
         df.groupby(["site_code", "year"])
-        .apply(_annual_stats, include_groups=False)
+        .apply(_annual_stats)
         .reset_index()
     )
 
