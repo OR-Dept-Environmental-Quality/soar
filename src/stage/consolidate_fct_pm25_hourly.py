@@ -129,7 +129,7 @@ def consolidate_pm25_hourly_for_year(
     )
 
     # Thin to hourly sample durations only
-    combined = combined["sample_duration_code"].isin(_SAMPLE_DURATION_CODES)
+    combined = combined[combined["sample_duration_code"].isin(_SAMPLE_DURATION_CODES)]
 
     after = len(combined)
 
