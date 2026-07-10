@@ -1,7 +1,7 @@
 """PM2.5 Hourly Consolidation Script.
 
 Consolidates hourly PM2.5 data from AQS (parameters 88101 and 88502) and
-Envista (parameter 88502, POC 99) into a single deduuplicated fact table.
+Envista (parameter 88502, POC 99) into a single deduplicated fact table.
 
 When multiple sources cover the same site-hour, one record is kept using a
 priority hierarchy that matches the criteria daily pipeline:
@@ -154,7 +154,7 @@ def run_consolidation(unique_monitors: pd.DataFrame) -> None:
     print("Starting PM2.5 Hourly Consolidation Pipeline")
 
     raw_sample_dir = config.RAW_AQS_SAMPLE
-    raw_env_sample_dir = config.RAW_ENV_MONITORS
+    raw_env_sample_dir = config.RAW_ENV_SAMPLE
 
     if not raw_sample_dir.exists():
         print(f"AQS sample directory not found: {raw_sample_dir}")
