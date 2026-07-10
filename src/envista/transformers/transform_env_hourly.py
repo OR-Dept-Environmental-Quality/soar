@@ -15,7 +15,7 @@ import pandas as pd
 _PARAMETER_CODE = "88502"
 _POC = 99
 _PARAMETER = "Acceptable PM2.5 AQI & Speciation Mass"
-_SAMPLE_DURATION_CODE = "X"
+_SAMPLE_DURATION_CODE = "1"
 _SAMPLE_DURATION = "1 HOUR"
 _UNITS = "Micrograms per cubic meter (LC)"
 _METHOD_CODE = 999
