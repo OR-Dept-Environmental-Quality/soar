@@ -107,7 +107,15 @@ def transform_aqs_sample_hourly(
 
     if combined.empty:
         return pd.DataFrame()
-
+    
+    #Keep only true hourly readings (i.e. sample_duration_code == "1"). AQS sample data may include other durations (e.g. 24H, 1D, etc.) which are not relevant for diurnal analysis.
+    before_count = len(combined)
+    combined = combined[combined["sample_duration_code"] == "1"].copy()
+    print(f"  Filtered to {len(combined)} hourly records from {before_count} total records")
+    
+    if combined.empty:
+        return pd.DataFrame()
+    
     combined["source"] = "AQS"
 
     # Select output columns; fill missing schema columns with NA

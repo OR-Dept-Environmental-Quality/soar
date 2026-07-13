@@ -70,6 +70,8 @@ def _process_site_year(
         )
 
         if envista_data_hourly is not None and not envista_data_hourly.empty:
+            ### Add stationId column to hourly DataFrame for consistency with daily data
+            envista_data_hourly['stationId'] = station_id 
             # Check if DataFrame has any all-NA columns
             all_na_cols = envista_data_hourly.columns[envista_data_hourly.isna().all()].tolist()
             

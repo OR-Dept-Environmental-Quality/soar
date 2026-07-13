@@ -154,7 +154,7 @@ def run_consolidation(unique_monitors: pd.DataFrame) -> None:
     print("Starting PM2.5 Hourly Consolidation Pipeline")
 
     raw_sample_dir = config.RAW_AQS_SAMPLE
-    raw_env_sample_dir = config.RAW_ENV_MONITORS
+    raw_env_sample_dir = config.RAW_ENV_SAMPLE #Changed MONITORS to SAMPLE to pull hourly data from envista instead of monitors
 
     if not raw_sample_dir.exists():
         print(f"AQS sample directory not found: {raw_sample_dir}")
