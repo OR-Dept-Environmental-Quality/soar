@@ -2,8 +2,8 @@
 
 Reads from the staged layer (fct_aqi_daily, fct_criteria_daily, dim_sites)
 and produces two output tables in staged/wildfire/:
-  stg_wildfire_aqi_daily.parquet      — one row per site per date
-  stg_wildfire_annual_summary.parquet — one row per site per year (wildfire season only)
+  stg_wildfire_aqi_daily.csv      — one row per site per date
+  stg_wildfire_annual_summary.csv — one row per site per year (wildfire season only)
 
 Prerequisites:
   - run_aqi_daily_consolidation.py must have produced fct_aqi_daily files

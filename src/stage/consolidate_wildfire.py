@@ -188,8 +188,9 @@ def build_daily_table(
         & daily["pm25_concentration_mean"].notna()
         & (daily["pm25_concentration_mean"] > WF_PM25_THRESHOLD)
     )
-    daily["is_wf_event_type"]       = daily["event_type"] != "No Events"
-    daily["is_concurred_exclusion"] = daily["event_type"] == "Concurred Events Excluded"
+    event_type_normalized = daily["event_type"].fillna("No Events")
+    daily["is_wf_event_type"]       = event_type_normalized != "No Events"
+    daily["is_concurred_exclusion"] = event_type_normalized == "Concurred Events Excluded"
 
     # Join site metadata
     daily = daily.merge(sites, on="site_code", how="left")

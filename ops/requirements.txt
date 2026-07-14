@@ -1,9 +1,9 @@
-pyaqsapi
+black
 pandas
+pyaqsapi
 pyarrow
+pytest
 python-dotenv
 python-json-logger
+requests
 ruff
-black
-pytest
-pandera
