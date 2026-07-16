@@ -1,8 +1,12 @@
-""" Wood smoke toxics consolidation pipeline
+""" Wood smoke pollutants consolidation pipeline
 
 Filters already staged toxics sample fact table down to the subset of toxics that are relevant to wood smoke, 
 and consolidates multiple sources into a single deduplicated fact table.
-These include acrolein, benzene, formaldehyde, and  1,3-butadiene. 
+These include Acrolein, Benzene, Formaldehyde, 1,3-Butadiene, Acetonitrile, Benzo(a)pyrene, Benzo(a)anthracene, Benzo(b)fluoranthene,
+Benzo(k)fluoranthene, Chrysene, Dibenzo(a,h)anthracene, Indeno(1,2,3-cd)pyrene.
+This covers smoke poluutants from both wood stoves and wildfires.
+
+**Black carbon will be added once it is staged.**
 
 Source: staged/fct_toxics_sample/fct_toxics_sample_{year}.csv (already transformed to include TRV exceedances)
 Output: staged/fct_wood_smoke_toxics/fct_wood_smoke_toxics_{year}.csv
@@ -20,16 +24,13 @@ sys.path.insert(0, str(ROOT / "src"))
 
 import config
 
-#AQS parameter codes for wood smoke toxics of interest
-# 43509 - Acrolein
-# 45201 - Benzene
-# 43502 - Formaldehyde
-# 43218 - 1,3-Butadiene
+#AQS parameter codes for wood smoke pollutants of interest
 _WOOD_SMOKE_PARAM_CODES = [
     "43509", #Acrolein
     "45201", #Benzene
     "43502", #Formaldehyde
     "43218", #1,3-Butadiene
+    "43702" #Acetonitrile
     "17242", #Benzo(a)pyrene 
     "17215", #Benzo(a)anthracene
     "17220", #Benzo(b)fluoranthene 
