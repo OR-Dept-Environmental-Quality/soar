@@ -25,7 +25,20 @@ import config
 # 45201 - Benzene
 # 43502 - Formaldehyde
 # 43218 - 1,3-Butadiene
-_WOOD_SMOKE_PARAM_CODES = ["43509", "45201", "43502", "43218"]
+_WOOD_SMOKE_PARAM_CODES = [
+    "43509", #Acrolein
+    "45201", #Benzene
+    "43502", #Formaldehyde
+    "43218", #1,3-Butadiene
+    "17242", #Benzo(a)pyrene 
+    "17215", #Benzo(a)anthracene
+    "17220", #Benzo(b)fluoranthene 
+    "17223", #Benzo(k)fluoranthene
+    "17208", #Chrysene 
+    "17231", #Dibenzo(a,h)anthracene 
+    "17243", #Indeno(1,2,3-cd)pyrene 
+
+]
 
 
 def consolidate_wood_smoke_toxics_for_year(year: str, staged_toxics_dir: Path) -> pd.DataFrame: 
