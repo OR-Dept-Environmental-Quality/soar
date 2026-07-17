@@ -29,7 +29,6 @@ from envista.transformers.transform_env_hourly import transform_env_hourly_for_y
 
 # PM2.5 parameter codes to pull from AQS sample files
 _PM25_PARAM_CODES = ["88101", "88502"]
-_SAMPLE_DURATION_CODES = ["1"]
 
 _OUTPUT_COLUMNS = [
     "site_code",
@@ -127,9 +126,6 @@ def consolidate_pm25_hourly_for_year(
         subset=["site_code", "date_local", "time_local"],
         keep="first",
     )
-
-    # Thin to hourly sample durations only
-    combined = combined[combined["sample_duration_code"].isin(_SAMPLE_DURATION_CODES)]
 
     after = len(combined)
 
