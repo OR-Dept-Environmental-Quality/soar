@@ -30,7 +30,7 @@ _WOOD_SMOKE_PARAM_CODES = [
     "45201", #Benzene
     "43502", #Formaldehyde
     "43218", #1,3-Butadiene
-    "43702" #Acetonitrile
+    "43702", #Acetonitrile
     "17242", #Benzo(a)pyrene 
     "17215", #Benzo(a)anthracene
     "17220", #Benzo(b)fluoranthene 
