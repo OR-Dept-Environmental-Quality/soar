@@ -108,6 +108,15 @@ def transform_aqs_sample_hourly(
     if combined.empty:
         return pd.DataFrame()
 
+    ## Add hourly filter
+    before_count = len(combined)
+    combined = combined[combined["sample_duration_code"] == "1"]
+    print(f"  Filtered to {len(combined)} hourly records (from {before_count})")
+    
+    if combined.empty:
+        return pd.DataFrame()
+    
+
     combined["source"] = "AQS"
 
     # Select output columns; fill missing schema columns with NA
