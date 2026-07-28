@@ -4,7 +4,7 @@ Filters already staged toxics sample fact table down to the subset of toxics tha
 and consolidates multiple sources into a single deduplicated fact table.
 These include Acrolein, Benzene, Formaldehyde, 1,3-Butadiene, Acetonitrile, Benzo(a)pyrene, Benzo(a)anthracene, Benzo(b)fluoranthene,
 Benzo(k)fluoranthene, Chrysene, Dibenzo(a,h)anthracene, Indeno(1,2,3-cd)pyrene.
-This covers smoke poluutants from both wood stoves and wildfires.
+This covers smoke pollutants from both wood stoves and wildfires.
 
 **Black carbon will be added once it is staged.**
 
