@@ -2,7 +2,7 @@
 """Wind Speed (Meteorological) Consolidation Script
 
 Consolidates hourly wind speed data from AQS (parameter 61103, Scalar Wind Speed) into a staged fact table, for use in air stagnation analysis 
-alongside PM2.5 and wood smoke tosical dinural patterns,
+alongside PM2.5 and wood smoke toxics dinurnal patterns,
 
 Outout: staged/fct_wind_speed/fct_wind_speed_{year}.csv
 """
