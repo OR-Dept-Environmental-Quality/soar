@@ -1,4 +1,4 @@
-""" Stage raw air quality advisory logs into fct_air_aquality_advisories.
+""" Stage raw air quality advisory logs into fct_air_quality_advisories.
 
 Source: {ADVISORY_SOURCE_DIR}/{year}/{year}.advisory.tracking.csv
 
@@ -243,7 +243,7 @@ def load_direction_crosswalk() -> pd.DataFrame:
     path = ROOT / 'ops' / 'advisory_direction_crosswalk.csv'
     if not path.exists():
         print(f"Advisory direction crosswalk not found: {path}")
-        return pd.DataFrame(columns=['county_name', 'direction', 'local_site_name'])
+        return pd.DataFrame(columns=['county', 'direction', 'local_site_name'])
     return pd.read_csv(path)
 
 def attach_site_codes(df: pd.DataFrame, sites: pd.DataFrame, crosswalk: pd.DataFrame) -> pd.DataFrame:
@@ -368,14 +368,14 @@ def merge_continuous_advisories(df: pd.DataFrame) -> pd.DataFrame:
     df["end_date"] = pd.to_datetime(df["end_date"])
 
     merged_rows = []
-    group_cols = ["site_code", "pollutant_source"]
+    group_cols = ["site_code", "pollutant_source", "issued_advisory"]
     for _, group in df.groupby(group_cols, sort=False):
         group = group.sort_values("start_date").reset_index(drop=True)
         current = group.iloc[0].to_dict()
         current_end = current["end_date"]
 
         for _, row in group.iloc[1:].iterrows():
-            dates_touch = row["start_date"] <= current_end
+            dates_touch = row["start_date"] <= current_end + pd.Timedelta(days=1)
             comments_match = _values_match(row.get("comments"), current.get("comments"))
             fire_names_match  = _values_match(row.get("fire_names"), current.get("fire_names"))
 
@@ -390,6 +390,14 @@ def merge_continuous_advisories(df: pd.DataFrame) -> pd.DataFrame:
         merged_rows.append(current)
 
     return pd.DataFrame(merged_rows)
+
+_INVALID_COMMENT_VALUES = {"wrong", "not correct"}
+
+def _invalid_comment(comments)-> bool:
+    """True if a comment is a correction note (e.g. "wrong")"""
+    if not isinstance(comments, str):
+        return False
+    return comments.strip().casefold() in _INVALID_COMMENT_VALUES
 
 def consolidate_advisories_for_year(year: str, source_dir: Path) -> pd.DataFrame:
     """ Read and clean the raw advisory tracking data for a specific year, returning a DataFrame with the consolidated data.
@@ -454,7 +462,13 @@ def consolidate_advisories_for_year(year: str, source_dir: Path) -> pd.DataFrame
     for col in _YES_NO_COLS:
         df[col] = df[col].astype(str).str.strip().str.upper().eq("YES")
 
-    print(f"Consolidated {len(df)} advisory records for year {year} from {len(df)} total advisory records")
+        before_count = len(df)
+        df = df[~df["comments"].apply(_invalid_comment)]
+        filtered_count = before_count - len(df)
+        if filtered_count:
+            print(f' Filtered {filtered_count} row(s) with invalid comment ("wrong/" "not corect")')
+
+    print(f"Consolidated {len(df)} advisory records for year {year} from {before_count} total advisory records")
     return df
 
 def run_consolidation() -> None:
@@ -503,6 +517,11 @@ def run_consolidation() -> None:
         if year == "2022":
             print("  2022 county values are not reliably splittable per county -"
                   "skipping site_code attachment for 2022 advisories")
+            out_path = output_dir / f"fct_air_quality_advisories_{year}.csv"
+            result.to_csv(out_path, index=False)
+            print(f" Wrote {len(result)} records for {year} (no site code)")
+            years_processed += 1
+            total_records += len(result)
             continue
 
         result = attach_site_codes(result, sites, crosswalk)
