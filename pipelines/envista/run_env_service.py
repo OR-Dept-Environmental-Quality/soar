@@ -35,7 +35,6 @@ ENV_TEST_MODE = str(config.ENV_TEST_MODE).lower() in ("1", "true", "yes")
 ENV_MONITOR_DIR = config.RAW_ENV_MONITORS
 ENV_SAMPLE_DIR = config.RAW_ENV_SAMPLE
 ENV_DAILY_DIR = config.RAW_ENV_DAILY
-OPS_DIR = Path(__file__).resolve().parents[2] / "ops"
 
 BDATE = config.BDATE
 EDATE = config.EDATE
@@ -52,27 +51,17 @@ if BDATE < date(2018, 7, 1): BDATE = date(2018, 7, 1)  # Envista data starts mid
 
 def _load_envista_group_catalog() -> pd.DataFrame:
     """Load monitor_name to group_store mappings from Envista dimension tables."""
-    candidates = [
-        OPS_DIR / "dimPollutant_Envista.csv",
-        OPS_DIR / "dimPollutants_Envista.csv",
-        OPS_DIR / "dimPollutant.csv",
-        OPS_DIR / "dimPollutants.csv",
-    ]
+    
+    df = pd.read_csv("ops/dimPollutant_Envista.csv", dtype=str)
+    normalized_cols = {str(col).strip(): col for col in df.columns}
 
-    for path in candidates:
-        if not path.exists():
-            continue
-
-        df = pd.read_csv(path, skipinitialspace=True)
-        normalized_cols = {str(col).strip(): col for col in df.columns}
-
-        if "monitor_name" in normalized_cols and "group_store" in normalized_cols:
-            df = df[[normalized_cols["monitor_name"], normalized_cols["group_store"]]].copy()
-            df.columns = ["monitor_name", "group_store"]
-            df = df.dropna(subset=["monitor_name", "group_store"]).drop_duplicates()
-            df["monitor_name"] = df["monitor_name"].astype(str).str.strip()
-            df["group_store"] = df["group_store"].astype(str).str.strip()
-            return df
+    if "monitor_name" in normalized_cols and "group_store" in normalized_cols:
+        df = df[[normalized_cols["monitor_name"], normalized_cols["group_store"]]].copy()
+        df.columns = ["monitor_name", "group_store"]
+        df = df.dropna(subset=["monitor_name", "group_store"]).drop_duplicates()
+        df["monitor_name"] = df["monitor_name"].astype(str).str.strip()
+        df["group_store"] = df["group_store"].astype(str).str.strip()
+        return df
 
     raise FileNotFoundError(
         "No Envista pollutant catalog file with monitor_name and group_store columns was found in ops/."
