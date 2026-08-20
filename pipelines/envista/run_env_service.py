@@ -34,6 +34,7 @@ ENV_TEST_MODE = str(config.ENV_TEST_MODE).lower() in ("1", "true", "yes")
 ENV_MONITOR_DIR = config.RAW_ENV_MONITORS
 ENV_SAMPLE_DIR = config.RAW_ENV_SAMPLE
 ENV_DAILY_DIR = config.RAW_ENV_DAILY
+OPS_DIR = Path(__file__).resolve().parents[2] / "ops"
 
 BDATE = config.BDATE
 EDATE = config.EDATE
@@ -42,14 +43,43 @@ ENV_SAMPLE_SITE_WORKERS = max(1, int(os.getenv("ENV_SAMPLE_SITE_WORKERS", "3")))
 
 _session_local = threading.local()
 _data_lock = threading.Lock()
-_combined_hourly_results: dict[str, pd.DataFrame] = {}  # Key format: "year"
-_combined_daily_results: dict[str, pd.DataFrame] = {}  # Key format: "year"
+_combined_sample_results: dict[tuple[str, str], pd.DataFrame] = {}  # Key format: (group_store, year)
+_combined_daily_results: dict[tuple[str, str], pd.DataFrame] = {}  # Key format: (group_store, year)
 
 if BDATE < date(2018, 7, 1): BDATE = date(2018, 7, 1)  # Envista data starts mid-2018
 
 
+def _load_envista_group_catalog() -> pd.DataFrame:
+    """Load monitor_name to group_store mappings from Envista dimension tables."""
+    candidates = [
+        OPS_DIR / "dimPollutant_Envista.csv",
+        OPS_DIR / "dimPollutants_Envista.csv",
+        OPS_DIR / "dimPollutant.csv",
+        OPS_DIR / "dimPollutants.csv",
+    ]
+
+    for path in candidates:
+        if not path.exists():
+            continue
+
+        df = pd.read_csv(path, skipinitialspace=True)
+        normalized_cols = {str(col).strip(): col for col in df.columns}
+
+        if "monitor_name" in normalized_cols and "group_store" in normalized_cols:
+            df = df[[normalized_cols["monitor_name"], normalized_cols["group_store"]]].copy()
+            df.columns = ["monitor_name", "group_store"]
+            df = df.dropna(subset=["monitor_name", "group_store"]).drop_duplicates()
+            df["monitor_name"] = df["monitor_name"].astype(str).str.strip()
+            df["group_store"] = df["group_store"].astype(str).str.strip()
+            return df
+
+    raise FileNotFoundError(
+        "No Envista pollutant catalog file with monitor_name and group_store columns was found in ops/."
+    )
+
+
 def _process_hourly_site_year(
-    station_name: str, station_id: str, channel_name: str, channel_id: str, year: str
+    station_name: str, station_id: str, channel_name: str, channel_id: str, year: str, group_store: str
 ) -> tuple[str, str, str, int, bool]:
     """Extract hourly Envista data for one site and one calendar year."""
     from_date = f"{year}-01-01"
@@ -89,13 +119,14 @@ def _process_hourly_site_year(
         )
 
         with _data_lock:
-            if year in _combined_hourly_results:
-                _combined_hourly_results[year] = pd.concat(
-                    [_combined_hourly_results[year], envista_data_hourly],
+            key = (group_store, year)
+            if key in _combined_sample_results:
+                _combined_sample_results[key] = pd.concat(
+                    [_combined_sample_results[key], envista_data_hourly],
                     ignore_index=True,
                 )
             else:
-                _combined_hourly_results[year] = envista_data_hourly.copy()
+                _combined_sample_results[key] = envista_data_hourly.copy()
 
         return station_id, channel_id, year, hourly_rows, True
 
@@ -109,7 +140,7 @@ def _process_hourly_site_year(
 
 
 def _process_daily_site_year(
-    station_name: str, station_id: str, channel_name: str, channel_id: str, year: str
+    station_name: str, station_id: str, channel_name: str, channel_id: str, year: str, group_store: str
 ) -> tuple[str, str, str, int, bool]:
     """Extract daily averaged Envista data for one site and one calendar year."""
     from_date = f"{year}-01-01"
@@ -149,13 +180,14 @@ def _process_daily_site_year(
         )
 
         with _data_lock:
-            if year in _combined_daily_results:
-                _combined_daily_results[year] = pd.concat(
-                    [_combined_daily_results[year], envista_data_daily],
+            key = (group_store, year)
+            if key in _combined_daily_results:
+                _combined_daily_results[key] = pd.concat(
+                    [_combined_daily_results[key], envista_data_daily],
                     ignore_index=True,
                 )
             else:
-                _combined_daily_results[year] = envista_data_daily.copy()
+                _combined_daily_results[key] = envista_data_daily.copy()
 
         return station_id, channel_id, year, daily_rows, True
 
@@ -186,6 +218,7 @@ def _process_hourly_year(
                 str(site['monitor_name']),
                 str(site['channel_id']),
                 year,
+                str(site.get('group_store', 'unknown')),
             )
             for site in pm25_sites
         ]
@@ -217,6 +250,7 @@ def _process_daily_year(
                 str(site['monitor_name']),
                 str(site['channel_id']),
                 year,
+                str(site.get('group_store', 'unknown')),
             )
             for site in pm25_sites
         ]
@@ -236,13 +270,13 @@ def _process_sample_service(
     """Run hourly Envista sample data extraction concurrently by year and site."""
     logger = get_logger(__name__)
 
-    _combined_hourly_results.clear()
+    _combined_sample_results.clear()
 
     print("\n" + "=" * 60)
     print("STARTING ENVISTA HOURLY SAMPLE SERVICE (PM2.5 SensOR)")
     print("=" * 60)
 
-    total_hourly_rows = 0
+    total_sample_rows = 0
 
     with ThreadPoolExecutor(max_workers=ENV_SAMPLE_YEAR_WORKERS) as executor:
         futures = [
@@ -256,26 +290,26 @@ def _process_sample_service(
         ]
 
         for future in futures:
-            total_hourly_rows += future.result()
+            total_sample_rows += future.result()
 
-    logger.info(f"Hourly sample service complete: {total_hourly_rows} total hourly rows extracted.")
+    logger.info(f"Hourly sample service complete: {total_sample_rows} total hourly rows extracted.")
 
     config.ensure_dirs(ENV_SAMPLE_DIR)
-    for year, df in _combined_hourly_results.items():
+    for (group_store, year), df in _combined_sample_results.items():
         if df.empty:
-            logger.warning(f"Skipping year {year}: DataFrame is empty")
+            logger.warning(f"Skipping {group_store} year {year}: DataFrame is empty")
             continue
 
         all_na_cols = df.columns[df.isna().all()].tolist()
         if len(all_na_cols) == len(df.columns):
-            logger.warning(f"Skipping year {year}: All columns contain only NA values")
+            logger.warning(f"Skipping {group_store} year {year}: All columns contain only NA values")
             continue
 
-        output_file = ENV_SAMPLE_DIR / f"env_hourly_pm25_{year}.csv"
+        output_file = ENV_SAMPLE_DIR / f"env_hourly_{group_store}_{year}.csv"
         write_csv(df, output_file)
-        logger.info(f"Exported {len(df)} rows for year {year} to {output_file}")
+        logger.info(f"Exported {len(df)} rows for {group_store} year {year} to {output_file}")
 
-    print(f"\n[COMPLETE] HOURLY SAMPLE SERVICE COMPLETE: {total_hourly_rows} total hourly rows extracted.\n")
+    print(f"\n[COMPLETE] HOURLY SAMPLE SERVICE COMPLETE: {total_sample_rows} total hourly rows extracted.\n")
 
 
 def _process_daily_service(
@@ -309,19 +343,19 @@ def _process_daily_service(
     logger.info(f"Daily sample service complete: {total_daily_rows} total daily rows extracted.")
 
     config.ensure_dirs(ENV_DAILY_DIR)
-    for year, df in _combined_daily_results.items():
+    for (group_store, year), df in _combined_daily_results.items():
         if df.empty:
-            logger.warning(f"Skipping year {year} daily data: DataFrame is empty")
+            logger.warning(f"Skipping {group_store} year {year} daily data: DataFrame is empty")
             continue
 
         all_na_cols = df.columns[df.isna().all()].tolist()
         if len(all_na_cols) == len(df.columns):
-            logger.warning(f"Skipping year {year} daily data: All columns contain only NA values")
+            logger.warning(f"Skipping {group_store} year {year} daily data: All columns contain only NA values")
             continue
 
-        output_file = ENV_DAILY_DIR / f"env_daily_pm25_{year}.csv"
+        output_file = ENV_DAILY_DIR / f"env_daily_{group_store}_{year}.csv"
         write_csv(df, output_file)
-        logger.info(f"Exported {len(df)} daily rows for year {year} to {output_file}")
+        logger.info(f"Exported {len(df)} daily rows for {group_store} year {year} to {output_file}")
 
     print(f"\n[COMPLETE] DAILY SAMPLE SERVICE COMPLETE: {total_daily_rows} total daily rows extracted.\n")
 
@@ -357,14 +391,33 @@ def main() -> None:
         logger.error("Failed to extract Envista station data")
         sys.exit(1)
     
-    # Extract PM2.5 monitors paired with their station and channel IDs
-    pm25_monitors = monitor_metadata[monitor_metadata['monitor_alias'] == "PM2.5 Est SensOR"]
-    pm25_sites = pm25_monitors[['name', 'station_id', 'monitor_name', 'channel_id']].drop_duplicates().to_dict('records')
-    logger.info(f"Found {len(pm25_sites)} unique PM2.5 SensOR sites")
+    # Load configured monitor names and group_store mappings from the Envista dimension table
+    envista_group_catalog = _load_envista_group_catalog()
+    envista_group_catalog["monitor_name_norm"] = (
+        envista_group_catalog["monitor_name"].astype(str).str.strip().str.casefold()
+    )
 
-    if not pm25_sites:
-        logger.warning("No PM2.5 SensOR sites found")
-        log_pipeline_end("Envista Service Pipeline", success=False, reason="no_pm25_sites")
+    monitor_metadata = monitor_metadata.copy()
+    monitor_metadata["monitor_name_norm"] = (
+        monitor_metadata["monitor_name"].astype(str).str.strip().str.casefold()
+    )
+
+    selected_sites = monitor_metadata.merge(
+        envista_group_catalog[["monitor_name_norm", "group_store"]],
+        how="inner",
+        on="monitor_name_norm",
+    )
+
+    monitored_sites = (
+        selected_sites[['name', 'station_id', 'monitor_name', 'channel_id', 'group_store']]
+        .drop_duplicates()
+        .to_dict('records')
+    )
+    logger.info(f"Found {len(monitored_sites)} unique Envista monitor sites from the catalog")
+
+    if not monitored_sites:
+        logger.warning("No configured Envista monitor sites found in the catalog")
+        log_pipeline_end("Envista Service Pipeline", success=False, reason="no_configured_sites")
         return
 
     # Generate years list
@@ -376,16 +429,16 @@ def main() -> None:
         logger.info("TEST MODE: Limiting to 2 years")
         years = years[:2]
 
-    if ENV_TEST_MODE and len(pm25_sites) > 3:
+    if ENV_TEST_MODE and len(monitored_sites) > 3:
         logger.info("TEST MODE: Limiting to 3 sites")
-        pm25_sites = pm25_sites[:3]
+        monitored_sites = monitored_sites[:3]
 
-    logger.info(f"Processing {len(pm25_sites)} sites across {len(years)} years")
+    logger.info(f"Processing {len(monitored_sites)} configured sites across {len(years)} years")
 
     try:
         # Run separate hourly and daily extraction services
-        _process_sample_service(years, pm25_sites)
-        _process_daily_service(years, pm25_sites)
+        _process_sample_service(years, monitored_sites)
+        _process_daily_service(years, monitored_sites)
 
         logger.info("=" * 60)
         logger.info("[COMPLETE] ENVISTA PIPELINE EXECUTION COMPLETE")
