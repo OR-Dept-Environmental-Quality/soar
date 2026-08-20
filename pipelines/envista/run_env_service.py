@@ -47,196 +47,283 @@ _combined_daily_results: dict[str, pd.DataFrame] = {}  # Key format: "year"
 
 if BDATE < date(2018, 7, 1): BDATE = date(2018, 7, 1)  # Envista data starts mid-2018
 
-def _process_site_year(
+
+def _process_hourly_site_year(
     station_name: str, station_id: str, channel_name: str, channel_id: str, year: str
-) -> tuple[str, str, str, int, int, bool]:
-    """Extract Envista sample data for one site and one calendar year.
-    
-    Returns a tuple of (station_id, channel_id, year, rows_written, succeeded)
-    so callers can decide whether to track results.
-    """
+) -> tuple[str, str, str, int, bool]:
+    """Extract hourly Envista data for one site and one calendar year."""
     from_date = f"{year}-01-01"
     to_date = f"{year}-12-31"
 
     logger = get_logger(__name__)
-    logger.debug(f"Extracting hourly data for {station_name}:{channel_name}, {station_id}:{channel_id} in {year}")
+    logger.debug(
+        f"Extracting hourly data for {station_name}:{channel_name}, {station_id}:{channel_id} in {year}"
+    )
 
     try:
         envista_data_hourly = get_envista_hourly(
             station_id=station_id,
             channel_id=channel_id,
             from_date=from_date,
-            to_date=to_date
+            to_date=to_date,
         )
 
-        if envista_data_hourly is not None and not envista_data_hourly.empty:
-            # Check if DataFrame has any all-NA columns
-            all_na_cols = envista_data_hourly.columns[envista_data_hourly.isna().all()].tolist()
-            
-            # Skip if all columns are NA
-            if len(all_na_cols) == len(envista_data_hourly.columns):
-                logger.warning(
-                    f"No data for {station_name}:{station_id}, {channel_name}:{channel_id} in {year}."
-                )
-                return station_id, channel_id, year, 0, 0, False
-            
-            envista_data_daily = get_envista_daily(
-                station_id=station_id,
-                channel_id=channel_id,
-                from_date=from_date,
-                to_date=to_date
-            )
-            
-            hourly_rows = len(envista_data_hourly)
-            daily_rows = len(envista_data_daily) if envista_data_daily is not None else 0
-            logger.info(
-                f"Retrieved {hourly_rows} hourly records and {daily_rows} daily records "
-                f"for {station_name}:{station_id}, {channel_name}:{channel_id} in {year}."
-            )
-            
-            # Store results grouped by year (combine all sites for each year)
-            with _data_lock:
-                if year in _combined_hourly_results:
-                    _combined_hourly_results[year] = pd.concat(
-                        [_combined_hourly_results[year], envista_data_hourly],
-                        ignore_index=True
-                    )
-                    _combined_daily_results[year] = pd.concat(
-                        [_combined_daily_results[year], envista_data_daily],
-                        ignore_index=True
-                    )
-                else:
-                    _combined_hourly_results[year] = envista_data_hourly.copy()
-                    _combined_daily_results[year] = envista_data_daily.copy() if envista_data_daily is not None else pd.DataFrame()
-
-            return station_id, channel_id, year, hourly_rows, daily_rows, True
-        else:
+        if envista_data_hourly is None or envista_data_hourly.empty:
             logger.warning(
                 f"No hourly data retrieved for {station_name}:{station_id}, {channel_name}:{channel_id} "
                 f"in {year}"
             )
+            return station_id, channel_id, year, 0, False
 
-            return station_id, channel_id, year, 0, 0, False
+        all_na_cols = envista_data_hourly.columns[envista_data_hourly.isna().all()].tolist()
+        if len(all_na_cols) == len(envista_data_hourly.columns):
+            logger.warning(
+                f"No data for {station_name}:{station_id}, {channel_name}:{channel_id} in {year}."
+            )
+            return station_id, channel_id, year, 0, False
+
+        hourly_rows = len(envista_data_hourly)
+        logger.info(
+            f"Retrieved {hourly_rows} hourly records for {station_name}:{station_id}, "
+            f"{channel_name}:{channel_id} in {year}."
+        )
+
+        with _data_lock:
+            if year in _combined_hourly_results:
+                _combined_hourly_results[year] = pd.concat(
+                    [_combined_hourly_results[year], envista_data_hourly],
+                    ignore_index=True,
+                )
+            else:
+                _combined_hourly_results[year] = envista_data_hourly.copy()
+
+        return station_id, channel_id, year, hourly_rows, True
 
     except Exception as e:
         logger.error(
             f"Error retrieving hourly data for {station_name}:{station_id}, {channel_name}:{channel_id} "
             f"in {year}: {e}",
-            exc_info=True
+            exc_info=True,
         )
-        return station_id, channel_id, year, 0, 0, False
+        return station_id, channel_id, year, 0, False
 
-def _process_year_concurrent(
-    year: str, pm25_sites: list[dict], site_workers: int
-) -> tuple[int, int]:
-    """Process all sites concurrently for a single year.
-    
-    Returns total rows extracted for the year.
-    """
+
+def _process_daily_site_year(
+    station_name: str, station_id: str, channel_name: str, channel_id: str, year: str
+) -> tuple[str, str, str, int, bool]:
+    """Extract daily averaged Envista data for one site and one calendar year."""
+    from_date = f"{year}-01-01"
+    to_date = f"{year}-12-31"
+
     logger = get_logger(__name__)
-    logger.info(f"Processing {len(pm25_sites)} sites concurrently for {year}")
+    logger.debug(
+        f"Extracting daily data for {station_name}:{channel_name}, {station_id}:{channel_id} in {year}"
+    )
 
-    year_hourly_total_rows = 0
-    year_daily_total_rows = 0
+    try:
+        envista_data_daily = get_envista_daily(
+            station_id=station_id,
+            channel_id=channel_id,
+            from_date=from_date,
+            to_date=to_date,
+        )
+
+        if envista_data_daily is None or envista_data_daily.empty:
+            logger.warning(
+                f"No daily data retrieved for {station_name}:{station_id}, {channel_name}:{channel_id} "
+                f"in {year}"
+            )
+            return station_id, channel_id, year, 0, False
+
+        all_na_cols = envista_data_daily.columns[envista_data_daily.isna().all()].tolist()
+        if len(all_na_cols) == len(envista_data_daily.columns):
+            logger.warning(
+                f"No daily data for {station_name}:{station_id}, {channel_name}:{channel_id} in {year}."
+            )
+            return station_id, channel_id, year, 0, False
+
+        daily_rows = len(envista_data_daily)
+        logger.info(
+            f"Retrieved {daily_rows} daily records for {station_name}:{station_id}, "
+            f"{channel_name}:{channel_id} in {year}."
+        )
+
+        with _data_lock:
+            if year in _combined_daily_results:
+                _combined_daily_results[year] = pd.concat(
+                    [_combined_daily_results[year], envista_data_daily],
+                    ignore_index=True,
+                )
+            else:
+                _combined_daily_results[year] = envista_data_daily.copy()
+
+        return station_id, channel_id, year, daily_rows, True
+
+    except Exception as e:
+        logger.error(
+            f"Error retrieving daily data for {station_name}:{station_id}, {channel_name}:{channel_id} "
+            f"in {year}: {e}",
+            exc_info=True,
+        )
+        return station_id, channel_id, year, 0, False
+
+
+def _process_hourly_year(
+    year: str, pm25_sites: list[dict], site_workers: int
+) -> int:
+    """Process all hourly site extractions for a single year."""
+    logger = get_logger(__name__)
+    logger.info(f"Processing {len(pm25_sites)} sites concurrently for hourly data in {year}")
+
+    year_total_rows = 0
 
     with ThreadPoolExecutor(max_workers=site_workers) as executor:
         futures = [
             executor.submit(
-                _process_site_year,
+                _process_hourly_site_year,
                 str(site['name']),
                 str(site['station_id']),
                 str(site['monitor_name']),
                 str(site['channel_id']),
-                year
+                year,
             )
             for site in pm25_sites
         ]
 
         for future in futures:
-            station_id, channel_id, processed_year, hourly_rows, daily_rows, succeeded = (
-                future.result()
-            )
+            _, _, _, hourly_rows, succeeded = future.result()
             if succeeded:
-                year_hourly_total_rows += hourly_rows
-                year_daily_total_rows += daily_rows
+                year_total_rows += hourly_rows
 
-    logger.info(f"Completed year {year}: {year_hourly_total_rows} total hourly rows, "
-                f"{year_daily_total_rows} total daily rows.")
-    return year_hourly_total_rows, year_daily_total_rows
+    logger.info(f"Completed hourly processing for {year}: {year_total_rows} total rows.")
+    return year_total_rows
 
-def _process_sample_service_concurrent(
+
+def _process_daily_year(
+    year: str, pm25_sites: list[dict], site_workers: int
+) -> int:
+    """Process all daily site extractions for a single year."""
+    logger = get_logger(__name__)
+    logger.info(f"Processing {len(pm25_sites)} sites concurrently for daily data in {year}")
+
+    year_total_rows = 0
+
+    with ThreadPoolExecutor(max_workers=site_workers) as executor:
+        futures = [
+            executor.submit(
+                _process_daily_site_year,
+                str(site['name']),
+                str(site['station_id']),
+                str(site['monitor_name']),
+                str(site['channel_id']),
+                year,
+            )
+            for site in pm25_sites
+        ]
+
+        for future in futures:
+            _, _, _, daily_rows, succeeded = future.result()
+            if succeeded:
+                year_total_rows += daily_rows
+
+    logger.info(f"Completed daily processing for {year}: {year_total_rows} total rows.")
+    return year_total_rows
+
+
+def _process_sample_service(
     years: list[str], pm25_sites: list[dict]
 ) -> None:
-    """Run sample data extraction concurrently by year and site."""
+    """Run hourly Envista sample data extraction concurrently by year and site."""
     logger = get_logger(__name__)
 
+    _combined_hourly_results.clear()
+
     print("\n" + "=" * 60)
-    print("STARTING ENVISTA SAMPLE SERVICE (PM2.5 SensOR)")
+    print("STARTING ENVISTA HOURLY SAMPLE SERVICE (PM2.5 SensOR)")
     print("=" * 60)
 
     total_hourly_rows = 0
-    total_daily_rows = 0
 
-    # Process years concurrently
     with ThreadPoolExecutor(max_workers=ENV_SAMPLE_YEAR_WORKERS) as executor:
         futures = [
             executor.submit(
-                _process_year_concurrent,
+                _process_hourly_year,
                 year,
                 pm25_sites,
-                ENV_SAMPLE_SITE_WORKERS
+                ENV_SAMPLE_SITE_WORKERS,
             )
             for year in years
         ]
 
         for future in futures:
-            total_hourly_rows += future.result()[0]
-            total_daily_rows += future.result()[1]
+            total_hourly_rows += future.result()
 
-    logger.info(f"Sample service complete: {total_hourly_rows} total hourly rows and "
-                f"{total_daily_rows} total daily rows extracted.")
+    logger.info(f"Hourly sample service complete: {total_hourly_rows} total hourly rows extracted.")
 
-    # Write combined results to CSV files by year
     config.ensure_dirs(ENV_SAMPLE_DIR)
-    
-    # Write year-based files for hourly data
     for year, df in _combined_hourly_results.items():
         if df.empty:
             logger.warning(f"Skipping year {year}: DataFrame is empty")
             continue
-        
-        # Check if all columns are NA
+
         all_na_cols = df.columns[df.isna().all()].tolist()
         if len(all_na_cols) == len(df.columns):
-            logger.warning(
-                f"Skipping year {year}: All columns contain only NA values"
-            )
+            logger.warning(f"Skipping year {year}: All columns contain only NA values")
             continue
-        config.ensure_dirs(ENV_SAMPLE_DIR)
+
         output_file = ENV_SAMPLE_DIR / f"env_hourly_pm25_{year}.csv"
         write_csv(df, output_file)
         logger.info(f"Exported {len(df)} rows for year {year} to {output_file}")
-    
-    # Write year-based files for daily data
+
+    print(f"\n[COMPLETE] HOURLY SAMPLE SERVICE COMPLETE: {total_hourly_rows} total hourly rows extracted.\n")
+
+
+def _process_daily_service(
+    years: list[str], pm25_sites: list[dict]
+) -> None:
+    """Run daily Envista sample data extraction concurrently by year and site."""
+    logger = get_logger(__name__)
+
+    _combined_daily_results.clear()
+
+    print("\n" + "=" * 60)
+    print("STARTING ENVISTA DAILY SAMPLE SERVICE (PM2.5 SensOR)")
+    print("=" * 60)
+
+    total_daily_rows = 0
+
+    with ThreadPoolExecutor(max_workers=ENV_SAMPLE_YEAR_WORKERS) as executor:
+        futures = [
+            executor.submit(
+                _process_daily_year,
+                year,
+                pm25_sites,
+                ENV_SAMPLE_SITE_WORKERS,
+            )
+            for year in years
+        ]
+
+        for future in futures:
+            total_daily_rows += future.result()
+
+    logger.info(f"Daily sample service complete: {total_daily_rows} total daily rows extracted.")
+
+    config.ensure_dirs(ENV_DAILY_DIR)
     for year, df in _combined_daily_results.items():
         if df.empty:
             logger.warning(f"Skipping year {year} daily data: DataFrame is empty")
             continue
-        
-        # Check if all columns are NA
+
         all_na_cols = df.columns[df.isna().all()].tolist()
         if len(all_na_cols) == len(df.columns):
-            logger.warning(
-                f"Skipping year {year} daily data: All columns contain only NA values"
-            )
+            logger.warning(f"Skipping year {year} daily data: All columns contain only NA values")
             continue
-        config.ensure_dirs(ENV_DAILY_DIR)
+
         output_file = ENV_DAILY_DIR / f"env_daily_pm25_{year}.csv"
         write_csv(df, output_file)
         logger.info(f"Exported {len(df)} daily rows for year {year} to {output_file}")
 
-    print(f"\n[COMPLETE] SAMPLE SERVICE COMPLETE: {total_hourly_rows} total hourly rows and "
-          f"{total_daily_rows} total daily rows extracted.\n")
+    print(f"\n[COMPLETE] DAILY SAMPLE SERVICE COMPLETE: {total_daily_rows} total daily rows extracted.\n")
 
 
 def main() -> None:
@@ -296,8 +383,9 @@ def main() -> None:
     logger.info(f"Processing {len(pm25_sites)} sites across {len(years)} years")
 
     try:
-        # Run concurrent sample extraction service (years and sites both concurrent)
-        _process_sample_service_concurrent(years, pm25_sites)
+        # Run separate hourly and daily extraction services
+        _process_sample_service(years, pm25_sites)
+        _process_daily_service(years, pm25_sites)
 
         logger.info("=" * 60)
         logger.info("[COMPLETE] ENVISTA PIPELINE EXECUTION COMPLETE")
