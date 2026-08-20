@@ -79,8 +79,8 @@ def _load_envista_group_catalog() -> pd.DataFrame:
     )
 
 
-def _parse_requested_group_stores(argv: list[str] | None = None) -> list[str] | None:
-    """Return selected group_store values from CLI args or ENV_GROUP_STORE, or None for all."""
+def _parse_requested_filters(argv: list[str] | None = None) -> tuple[list[str] | None, str]:
+    """Return selected group_store values and chosen service from CLI args or env."""
     parser = argparse.ArgumentParser(add_help=False)
     parser.add_argument(
         "--group-store",
@@ -89,31 +89,45 @@ def _parse_requested_group_stores(argv: list[str] | None = None) -> list[str] | 
         default=None,
         help="One or more group_store values to retrieve; e.g. --group-store pm25 carbonaceous_aerosol",
     )
+    parser.add_argument(
+        "--service",
+        choices=["hourly", "daily", "both"],
+        default=None,
+        help="Which Envista service to run: hourly, daily, or both",
+    )
     args, _ = parser.parse_known_args(argv)
 
-    raw_values: list[str] = []
+    raw_group_values: list[str] = []
     if args.group_store:
-        raw_values.extend(args.group_store)
+        raw_group_values.extend(args.group_store)
 
-    env_value = os.getenv("ENV_GROUP_STORE", "").strip()
-    if env_value:
-        raw_values.extend(part.strip() for part in env_value.split(","))
+    env_group_value = os.getenv("ENV_GROUP_STORE", "").strip()
+    if env_group_value:
+        raw_group_values.extend(part.strip() for part in env_group_value.split(","))
 
-    if not raw_values:
-        return None
+    if raw_group_values:
+        normalized_group_values = []
+        seen: set[str] = set()
+        for value in raw_group_values:
+            for part in str(value).split(","):
+                cleaned = part.strip()
+                if not cleaned:
+                    continue
+                key = cleaned.casefold()
+                if key not in seen:
+                    normalized_group_values.append(cleaned)
+                    seen.add(key)
+        requested_group_stores = normalized_group_values
+    else:
+        requested_group_stores = None
 
-    normalized = []
-    seen: set[str] = set()
-    for value in raw_values:
-        for part in str(value).split(","):
-            cleaned = part.strip()
-            if not cleaned:
-                continue
-            key = cleaned.casefold()
-            if key not in seen:
-                normalized.append(cleaned)
-                seen.add(key)
-    return normalized
+    if args.service:
+        requested_service = args.service
+    else:
+        env_service_value = os.getenv("ENV_SERVICE", "").strip().casefold()
+        requested_service = env_service_value if env_service_value in {"hourly", "daily", "both"} else "both"
+
+    return requested_group_stores, requested_service
 
 
 def _process_hourly_site_year(
@@ -401,7 +415,7 @@ def _process_daily_service(
 def main(argv: list[str] | None = None) -> None:
     """Main entry point for Envista service pipeline."""
     logger = get_logger(__name__)
-    requested_group_stores = _parse_requested_group_stores(argv)
+    requested_group_stores, requested_service = _parse_requested_filters(argv)
 
     log_level = "DEBUG" if ENV_TEST_MODE else "INFO"
     log_dir = ENV_MONITOR_DIR.parent
@@ -410,6 +424,7 @@ def main(argv: list[str] | None = None) -> None:
     logger.info("=" * 60)
     logger.info("[START] ENVISTA PIPELINE EXECUTION STARTING")
     logger.info("=" * 60)
+    logger.info(f"Requested Envista service: {requested_service}")
     if requested_group_stores:
         logger.info(f"Requested Envista group stores: {requested_group_stores}")
     else:
@@ -488,9 +503,10 @@ def main(argv: list[str] | None = None) -> None:
     logger.info(f"Processing {len(monitored_sites)} configured sites across {len(years)} years")
 
     try:
-        # Run separate hourly and daily extraction services
-        _process_sample_service(years, monitored_sites)
-        _process_daily_service(years, monitored_sites)
+        if requested_service in {"hourly", "both"}:
+            _process_sample_service(years, monitored_sites)
+        if requested_service in {"daily", "both"}:
+            _process_daily_service(years, monitored_sites)
 
         logger.info("=" * 60)
         logger.info("[COMPLETE] ENVISTA PIPELINE EXECUTION COMPLETE")
