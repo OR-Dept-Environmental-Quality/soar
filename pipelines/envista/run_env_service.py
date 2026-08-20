@@ -7,6 +7,7 @@ site-year extraction.
 
 from __future__ import annotations
 
+import argparse
 import os
 import sys
 import threading
@@ -76,6 +77,43 @@ def _load_envista_group_catalog() -> pd.DataFrame:
     raise FileNotFoundError(
         "No Envista pollutant catalog file with monitor_name and group_store columns was found in ops/."
     )
+
+
+def _parse_requested_group_stores(argv: list[str] | None = None) -> list[str] | None:
+    """Return selected group_store values from CLI args or ENV_GROUP_STORE, or None for all."""
+    parser = argparse.ArgumentParser(add_help=False)
+    parser.add_argument(
+        "--group-store",
+        "--group-stores",
+        nargs="+",
+        default=None,
+        help="One or more group_store values to retrieve; e.g. --group-store pm25 carbonaceous_aerosol",
+    )
+    args, _ = parser.parse_known_args(argv)
+
+    raw_values: list[str] = []
+    if args.group_store:
+        raw_values.extend(args.group_store)
+
+    env_value = os.getenv("ENV_GROUP_STORE", "").strip()
+    if env_value:
+        raw_values.extend(part.strip() for part in env_value.split(","))
+
+    if not raw_values:
+        return None
+
+    normalized = []
+    seen: set[str] = set()
+    for value in raw_values:
+        for part in str(value).split(","):
+            cleaned = part.strip()
+            if not cleaned:
+                continue
+            key = cleaned.casefold()
+            if key not in seen:
+                normalized.append(cleaned)
+                seen.add(key)
+    return normalized
 
 
 def _process_hourly_site_year(
@@ -360,9 +398,10 @@ def _process_daily_service(
     print(f"\n[COMPLETE] DAILY SAMPLE SERVICE COMPLETE: {total_daily_rows} total daily rows extracted.\n")
 
 
-def main() -> None:
+def main(argv: list[str] | None = None) -> None:
     """Main entry point for Envista service pipeline."""
     logger = get_logger(__name__)
+    requested_group_stores = _parse_requested_group_stores(argv)
 
     log_level = "DEBUG" if ENV_TEST_MODE else "INFO"
     log_dir = ENV_MONITOR_DIR.parent
@@ -371,6 +410,10 @@ def main() -> None:
     logger.info("=" * 60)
     logger.info("[START] ENVISTA PIPELINE EXECUTION STARTING")
     logger.info("=" * 60)
+    if requested_group_stores:
+        logger.info(f"Requested Envista group stores: {requested_group_stores}")
+    else:
+        logger.info("No Envista group store filter specified; retrieving all configured groups.")
     
     # Extract station data
     monitor_metadata = extract_envista_station_data()
@@ -408,6 +451,13 @@ def main() -> None:
         on="monitor_name_norm",
     )
 
+    if requested_group_stores:
+        requested_norm = {value.casefold() for value in requested_group_stores}
+        selected_sites = selected_sites[
+            selected_sites["group_store"].astype(str).str.casefold().isin(requested_norm)
+        ]
+        logger.info(f"Applied group_store filter: {requested_group_stores}")
+
     monitored_sites = (
         selected_sites[['name', 'station_id', 'monitor_name', 'channel_id', 'group_store']]
         .drop_duplicates()
@@ -416,7 +466,9 @@ def main() -> None:
     logger.info(f"Found {len(monitored_sites)} unique Envista monitor sites from the catalog")
 
     if not monitored_sites:
-        logger.warning("No configured Envista monitor sites found in the catalog")
+        logger.warning(
+            "No configured Envista monitor sites found in the catalog for the requested group_store filter"
+        )
         log_pipeline_end("Envista Service Pipeline", success=False, reason="no_configured_sites")
         return
 
