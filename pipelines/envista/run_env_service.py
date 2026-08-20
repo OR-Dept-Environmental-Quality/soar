@@ -242,11 +242,11 @@ def _process_daily_site_year(
 
 
 def _process_hourly_year(
-    year: str, pm25_sites: list[dict], site_workers: int
+    year: str, sites: list[dict], site_workers: int
 ) -> int:
     """Process all hourly site extractions for a single year."""
     logger = get_logger(__name__)
-    logger.info(f"Processing {len(pm25_sites)} sites concurrently for hourly data in {year}")
+    logger.info(f"Processing {len(sites)} sites concurrently for hourly data in {year}")
 
     year_total_rows = 0
 
@@ -261,7 +261,7 @@ def _process_hourly_year(
                 year,
                 str(site.get('group_store', 'unknown')),
             )
-            for site in pm25_sites
+            for site in sites
         ]
 
         for future in futures:
@@ -274,11 +274,11 @@ def _process_hourly_year(
 
 
 def _process_daily_year(
-    year: str, pm25_sites: list[dict], site_workers: int
+    year: str, sites: list[dict], site_workers: int
 ) -> int:
     """Process all daily site extractions for a single year."""
     logger = get_logger(__name__)
-    logger.info(f"Processing {len(pm25_sites)} sites concurrently for daily data in {year}")
+    logger.info(f"Processing {len(sites)} sites concurrently for daily data in {year}")
 
     year_total_rows = 0
 
@@ -293,7 +293,7 @@ def _process_daily_year(
                 year,
                 str(site.get('group_store', 'unknown')),
             )
-            for site in pm25_sites
+            for site in sites
         ]
 
         for future in futures:
@@ -306,7 +306,7 @@ def _process_daily_year(
 
 
 def _process_sample_service(
-    years: list[str], pm25_sites: list[dict]
+    years: list[str], sites: list[dict]
 ) -> None:
     """Run hourly Envista sample data extraction concurrently by year and site."""
     logger = get_logger(__name__)
@@ -324,7 +324,7 @@ def _process_sample_service(
             executor.submit(
                 _process_hourly_year,
                 year,
-                pm25_sites,
+                sites,
                 ENV_SAMPLE_SITE_WORKERS,
             )
             for year in years
@@ -354,7 +354,7 @@ def _process_sample_service(
 
 
 def _process_daily_service(
-    years: list[str], pm25_sites: list[dict]
+    years: list[str], sites: list[dict]
 ) -> None:
     """Run daily Envista sample data extraction concurrently by year and site."""
     logger = get_logger(__name__)
@@ -372,7 +372,7 @@ def _process_daily_service(
             executor.submit(
                 _process_daily_year,
                 year,
-                pm25_sites,
+                sites,
                 ENV_SAMPLE_SITE_WORKERS,
             )
             for year in years
