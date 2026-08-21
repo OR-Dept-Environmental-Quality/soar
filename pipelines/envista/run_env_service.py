@@ -130,8 +130,9 @@ def _process_parameter_for_year(
 ) -> tuple[str, str, str, int, bool]:
     """Extract Envista data for one site and one calendar year, by selected service."""
     from_date = f"{year}-01-01"
-    sample_to_date = f"{year + 1}-01-01"  # Exclusive end date for the year for selected year
-    daily_to_date = f"{year}-12-31"  # Inclusive end date for daily data for the selected year
+    to_date = f"{year}-12-31"  # Exclusive end date for the year for selected year
+    if service == "hourly":
+        to_date = f"{year + 1}-01-01"  # Inclusive end date for daily data for the selected year
 
     logger = get_logger(__name__)
     logger.debug(
@@ -144,7 +145,7 @@ def _process_parameter_for_year(
                 station_id=station_id,
                 channel_id=channel_id,
                 from_date=from_date,
-                to_date=sample_to_date,
+                to_date=to_date,
             )
             storage_dict = _combined_sample_results
             storage_label = "hourly"
@@ -153,7 +154,7 @@ def _process_parameter_for_year(
                 station_id=station_id,
                 channel_id=channel_id,
                 from_date=from_date,
-                to_date=daily_to_date,
+                to_date=to_date,
             )
             storage_dict = _combined_daily_results
             storage_label = "daily"
