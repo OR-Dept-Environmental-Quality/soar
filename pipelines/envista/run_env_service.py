@@ -119,7 +119,7 @@ def _parse_requested_filters(argv: list[str] | None = None) -> tuple[list[str] |
     return requested_group_stores, requested_service
 
 
-def _process_site_year(
+def _process_parameter_for_year(
     station_name: str,
     station_id: str,
     channel_name: str,
@@ -210,7 +210,7 @@ def _process_sample_year(
     with ThreadPoolExecutor(max_workers=site_workers) as executor:
         futures = [
             executor.submit(
-                _process_site_year,
+                _process_parameter_for_year,
                 str(site['name']),
                 str(site['station_id']),
                 str(site['monitor_name']),
@@ -243,7 +243,7 @@ def _process_daily_year(
     with ThreadPoolExecutor(max_workers=site_workers) as executor:
         futures = [
             executor.submit(
-                _process_site_year,
+                _process_parameter_for_year,
                 str(site['name']),
                 str(site['station_id']),
                 str(site['monitor_name']),
