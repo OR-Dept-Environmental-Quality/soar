@@ -132,7 +132,7 @@ def _process_parameter_for_year(
     from_date = f"{year}-01-01"
     to_date = f"{year}-12-31"  # Exclusive end date for the year for selected year
     if service == "hourly":
-        to_date = f"{year + 1}-01-01"  # Inclusive end date for daily data for the selected year
+        to_date = f"{str(int(year) + 1)}-01-01"  # Inclusive end date for daily data for the selected year
 
     logger = get_logger(__name__)
     logger.debug(
