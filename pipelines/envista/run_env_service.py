@@ -130,7 +130,7 @@ def _process_parameter_for_year(
 ) -> tuple[str, str, str, int, bool]:
     """Extract Envista data for one site and one calendar year, by selected service."""
     from_date = f"{year}-01-01"
-    to_date = f"{year}-12-31"
+    to_date = f"{year + 1}-01-01"  # Exclusive end date for the year for selected year
 
     logger = get_logger(__name__)
     logger.debug(
