@@ -119,122 +119,79 @@ def _parse_requested_filters(argv: list[str] | None = None) -> tuple[list[str] |
     return requested_group_stores, requested_service
 
 
-def _process_hourly_site_year(
-    station_name: str, station_id: str, channel_name: str, channel_id: str, year: str, group_store: str
+def _process_site_year(
+    station_name: str,
+    station_id: str,
+    channel_name: str,
+    channel_id: str,
+    year: str,
+    group_store: str,
+    service: str,
 ) -> tuple[str, str, str, int, bool]:
-    """Extract hourly Envista data for one site and one calendar year."""
+    """Extract Envista data for one site and one calendar year, by selected service."""
     from_date = f"{year}-01-01"
     to_date = f"{year}-12-31"
 
     logger = get_logger(__name__)
     logger.debug(
-        f"Extracting hourly data for {station_name}:{channel_name}, {station_id}:{channel_id} in {year}"
+        f"Extracting {service} data for {station_name}:{channel_name}, {station_id}:{channel_id} in {year}"
     )
 
     try:
-        envista_data_hourly = get_envista_hourly(
-            station_id=station_id,
-            channel_id=channel_id,
-            from_date=from_date,
-            to_date=to_date,
-        )
+        if service == "hourly":
+            data = get_envista_hourly(
+                station_id=station_id,
+                channel_id=channel_id,
+                from_date=from_date,
+                to_date=to_date,
+            )
+            storage_dict = _combined_sample_results
+            storage_label = "hourly"
+        else:
+            data = get_envista_daily(
+                station_id=station_id,
+                channel_id=channel_id,
+                from_date=from_date,
+                to_date=to_date,
+            )
+            storage_dict = _combined_daily_results
+            storage_label = "daily"
 
-        if envista_data_hourly is None or envista_data_hourly.empty:
+        if data is None or data.empty:
             logger.warning(
-                f"No hourly data retrieved for {station_name}:{station_id}, {channel_name}:{channel_id} "
+                f"No {storage_label} data retrieved for {station_name}:{station_id}, {channel_name}:{channel_id} "
                 f"in {year}"
             )
             return station_id, channel_id, year, 0, False
 
-        all_na_cols = envista_data_hourly.columns[envista_data_hourly.isna().all()].tolist()
-        if len(all_na_cols) == len(envista_data_hourly.columns):
+        all_na_cols = data.columns[data.isna().all()].tolist()
+        if len(all_na_cols) == len(data.columns):
             logger.warning(
-                f"No data for {station_name}:{station_id}, {channel_name}:{channel_id} in {year}."
+                f"No {storage_label} data for {station_name}:{station_id}, {channel_name}:{channel_id} in {year}."
             )
             return station_id, channel_id, year, 0, False
 
-        hourly_rows = len(envista_data_hourly)
+        row_count = len(data)
         logger.info(
-            f"Retrieved {hourly_rows} hourly records for {station_name}:{station_id}, "
+            f"Retrieved {row_count} {storage_label} records for {station_name}:{station_id}, "
             f"{channel_name}:{channel_id} in {year}."
         )
 
         with _data_lock:
             key = (group_store, year)
-            if key in _combined_sample_results:
-                _combined_sample_results[key] = pd.concat(
-                    [_combined_sample_results[key], envista_data_hourly],
+            if key in storage_dict:
+                storage_dict[key] = pd.concat(
+                    [storage_dict[key], data],
                     ignore_index=True,
                 )
             else:
-                _combined_sample_results[key] = envista_data_hourly.copy()
+                storage_dict[key] = data.copy()
 
-        return station_id, channel_id, year, hourly_rows, True
-
-    except Exception as e:
-        logger.error(
-            f"Error retrieving hourly data for {station_name}:{station_id}, {channel_name}:{channel_id} "
-            f"in {year}: {e}",
-            exc_info=True,
-        )
-        return station_id, channel_id, year, 0, False
-
-
-def _process_daily_site_year(
-    station_name: str, station_id: str, channel_name: str, channel_id: str, year: str, group_store: str
-) -> tuple[str, str, str, int, bool]:
-    """Extract daily averaged Envista data for one site and one calendar year."""
-    from_date = f"{year}-01-01"
-    to_date = f"{year}-12-31"
-
-    logger = get_logger(__name__)
-    logger.debug(
-        f"Extracting daily data for {station_name}:{channel_name}, {station_id}:{channel_id} in {year}"
-    )
-
-    try:
-        envista_data_daily = get_envista_daily(
-            station_id=station_id,
-            channel_id=channel_id,
-            from_date=from_date,
-            to_date=to_date,
-        )
-
-        if envista_data_daily is None or envista_data_daily.empty:
-            logger.warning(
-                f"No daily data retrieved for {station_name}:{station_id}, {channel_name}:{channel_id} "
-                f"in {year}"
-            )
-            return station_id, channel_id, year, 0, False
-
-        all_na_cols = envista_data_daily.columns[envista_data_daily.isna().all()].tolist()
-        if len(all_na_cols) == len(envista_data_daily.columns):
-            logger.warning(
-                f"No daily data for {station_name}:{station_id}, {channel_name}:{channel_id} in {year}."
-            )
-            return station_id, channel_id, year, 0, False
-
-        daily_rows = len(envista_data_daily)
-        logger.info(
-            f"Retrieved {daily_rows} daily records for {station_name}:{station_id}, "
-            f"{channel_name}:{channel_id} in {year}."
-        )
-
-        with _data_lock:
-            key = (group_store, year)
-            if key in _combined_daily_results:
-                _combined_daily_results[key] = pd.concat(
-                    [_combined_daily_results[key], envista_data_daily],
-                    ignore_index=True,
-                )
-            else:
-                _combined_daily_results[key] = envista_data_daily.copy()
-
-        return station_id, channel_id, year, daily_rows, True
+        return station_id, channel_id, year, row_count, True
 
     except Exception as e:
         logger.error(
-            f"Error retrieving daily data for {station_name}:{station_id}, {channel_name}:{channel_id} "
+            f"Error retrieving {service} data for {station_name}:{station_id}, {channel_name}:{channel_id} "
             f"in {year}: {e}",
             exc_info=True,
         )
@@ -253,13 +210,14 @@ def _process_hourly_year(
     with ThreadPoolExecutor(max_workers=site_workers) as executor:
         futures = [
             executor.submit(
-                _process_hourly_site_year,
+                _process_site_year,
                 str(site['name']),
                 str(site['station_id']),
                 str(site['monitor_name']),
                 str(site['channel_id']),
                 year,
                 str(site.get('group_store', 'unknown')),
+                "hourly",
             )
             for site in sites
         ]
@@ -285,13 +243,14 @@ def _process_daily_year(
     with ThreadPoolExecutor(max_workers=site_workers) as executor:
         futures = [
             executor.submit(
-                _process_daily_site_year,
+                _process_site_year,
                 str(site['name']),
                 str(site['station_id']),
                 str(site['monitor_name']),
                 str(site['channel_id']),
                 year,
                 str(site.get('group_store', 'unknown')),
+                "daily",
             )
             for site in sites
         ]
@@ -305,7 +264,7 @@ def _process_daily_year(
     return year_total_rows
 
 
-def _process_sample_service(
+def run_sample_service(
     years: list[str], sites: list[dict]
 ) -> None:
     """Run hourly Envista sample data extraction concurrently by year and site."""
@@ -353,7 +312,7 @@ def _process_sample_service(
     print(f"\n[COMPLETE] HOURLY SAMPLE SERVICE COMPLETE: {total_sample_rows} total hourly rows extracted.\n")
 
 
-def _process_daily_service(
+def run_daily_service(
     years: list[str], sites: list[dict]
 ) -> None:
     """Run daily Envista sample data extraction concurrently by year and site."""
@@ -493,9 +452,9 @@ def main(argv: list[str] | None = None) -> None:
 
     try:
         if requested_service in {"hourly", "both"}:
-            _process_sample_service(years, monitored_sites)
+            run_sample_service(years, monitored_sites)
         if requested_service in {"daily", "both"}:
-            _process_daily_service(years, monitored_sites)
+            run_daily_service(years, monitored_sites)
 
         logger.info("=" * 60)
         logger.info("[COMPLETE] ENVISTA PIPELINE EXECUTION COMPLETE")
