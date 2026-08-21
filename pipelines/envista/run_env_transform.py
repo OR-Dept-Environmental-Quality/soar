@@ -30,7 +30,9 @@ def run():
 
     raw_monitors_dir = config.RAW_ENV_MONITORS
     raw_daily_dir = config.RAW_ENV_DAILY
+    raw_hourly_dir = config.RAW_ENV_HOURLY
     trans_daily_dir = config.TRANS_DAILY
+    trans_hourly_dir = config.TRANS_SAMPLE
     trans_aqi_dir = config.TRANS_AQI
 
     if not raw_monitors_dir.exists():
@@ -43,9 +45,17 @@ def run():
         print("Please run the daily extraction pipeline first.")
         return
 
+    if not raw_hourly_dir.exists():
+        print(f"Raw hourly directory not found: {raw_hourly_dir}")
+        print("Please run the hourly extraction pipeline first.")
+        return
+
     # Output directories
     if not trans_daily_dir.exists():
         trans_daily_dir.mkdir(parents=True, exist_ok=True)
+
+    if not trans_hourly_dir.exists():
+        trans_hourly_dir.mkdir(parents=True, exist_ok=True)
 
     # Create unique monitor and channel table
     print("Creating unique monitor and channel tables")
