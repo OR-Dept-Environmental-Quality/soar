@@ -6,20 +6,24 @@ into cleaned hourly records with a schema matching the AQS hourly fact table.
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import List
 
 import pandas as pd
 
-# Fixed field values that align Envista data with AQS parameter conventions
-_PARAMETER_CODE = "88502"
-_POC = 99
-_PARAMETER = "Acceptable PM2.5 AQI & Speciation Mass"
+
+def _infer_group_store_from_filename(file_path: Path) -> str | None:
+    """Infer the Envista group_store from a raw hourly filename."""
+    match = re.match(r"^env_hourly_(.+)_(\d{4})$", file_path.stem, flags=re.IGNORECASE)
+    if match:
+        return match.group(1)
+    return None
+
+
+# Default fixed field values that align Envista data with AQS parameter conventions
 _SAMPLE_DURATION_CODE = "1"
 _SAMPLE_DURATION = "1 HOUR"
-_UNITS = "Micrograms per cubic meter (LC)"
-_METHOD_CODE = 999
-_METHOD = "SensOR PM2.5 Monitor"
 _SOURCE = "Envista"
 
 _OUTPUT_COLUMNS = [
@@ -44,6 +48,7 @@ _OUTPUT_COLUMNS = [
 def transform_env_hourly(
     raw_files: List[Path],
     unique_monitors: pd.DataFrame,
+    pollutant_catalog: pd.DataFrame,
 ) -> pd.DataFrame:
     """Transform raw Envista hourly PM2.5 files into hourly records.
 
@@ -71,6 +76,9 @@ def transform_env_hourly(
         try:
             df = pd.read_csv(file_path)
             if not df.empty:
+                group_store = _infer_group_store_from_filename(file_path)
+                if group_store:
+                    df["group_store"] = str(group_store)
                 frames.append(df)
         except Exception as e:
             print(f"Warning: Failed to read {file_path}: {e}")
@@ -84,13 +92,26 @@ def transform_env_hourly(
     if combined.empty:
         return pd.DataFrame()
 
+    pollutant_lookup = {}
+    if not pollutant_catalog.empty:
+        catalog = pollutant_catalog[
+            ["group_store", "aqs_parameter_code", "aqs_parameter", "aqs_method_code", "aqs_method", "aqs_units"]
+        ].drop_duplicates()
+        for row in catalog.itertuples(index=False):
+            pollutant_lookup[str(row.group_store).strip()] = {
+                "parameter_code": str(row.aqs_parameter_code).strip() if pd.notna(row.aqs_parameter_code) else None,
+                "parameter": str(row.aqs_parameter).strip() if pd.notna(row.aqs_parameter) else None,
+                "method_code": str(row.aqs_method_code).strip() if pd.notna(row.aqs_method_code) else None,
+                "method": str(row.aqs_method).strip() if pd.notna(row.aqs_method) else None,
+                "units_of_measure": str(row.aqs_units).strip() if pd.notna(row.aqs_units) else None,
+            }
+
     # Drop sentinel missing-value rows
     combined = combined[combined["data_channels_value"] != -9999].copy()
 
     if combined.empty:
         return pd.DataFrame()
 
-    # Join monitor metadata to obtain stations_tag (site_code)
     merged = pd.merge(
         combined,
         unique_monitors[["station_id", "stations_tag"]],
@@ -99,35 +120,46 @@ def transform_env_hourly(
         right_on="station_id",
     )
 
-    # Parse datetime; extract date and time components
+    merged["group_store"] = merged["group_store"].astype(str)
+    if pollutant_lookup:
+        merged["parameter_code"] = merged["group_store"].map(
+            lambda value: pollutant_lookup.get(value, {}).get("parameter_code", None)
+        )
+        merged["parameter"] = merged["group_store"].map(
+            lambda value: pollutant_lookup.get(value, {}).get("parameter", None)
+        )
+        merged["method_code"] = merged["group_store"].map(
+            lambda value: pollutant_lookup.get(value, {}).get("method_code", None)
+        )
+        merged["method"] = merged["group_store"].map(
+            lambda value: pollutant_lookup.get(value, {}).get("method", None)
+        )
+        merged["units_of_measure"] = merged["group_store"].map(
+            lambda value: pollutant_lookup.get(value, {}).get("units_of_measure", None)
+        )
+    else:
+        merged["parameter_code"] = None
+        merged["parameter"] = None
+        merged["method_code"] = None
+        merged["method"] = None
+        merged["units_of_measure"] = None
+
     dt = pd.to_datetime(merged["data_datetime"], errors="coerce")
     merged["date_local"] = dt.dt.strftime("%Y-%m-%d")
     merged["time_local"] = dt.dt.strftime("%H:%M")
 
-    #filter out invalid data
     merged = merged[merged["data_channels_valid"] == "TRUE"]
 
-    # Map boolean validity to Y/N strings
-    merged["validity_indicator"] = merged["data_channels_value"].map(
-        lambda _: pd.NA  # placeholder; overwritten below
-    )
     merged["validity_indicator"] = merged["data_channels_valid"].map(
         {True: "Y", False: "N", "True": "Y", "False": "N", 1: "Y", 0: "N"}
     )
 
-    # Populate fixed fields
-    merged["parameter_code"] = _PARAMETER_CODE
     merged["poc"] = _POC
-    merged["parameter"] = _PARAMETER
     merged["sample_duration_code"] = _SAMPLE_DURATION_CODE
     merged["sample_duration"] = _SAMPLE_DURATION
-    merged["units_of_measure"] = _UNITS
-    merged["method_code"] = _METHOD_CODE
-    merged["method"] = _METHOD
     merged["qualifier"] = pd.NA
     merged["source"] = _SOURCE
 
-    # Rename to output schema names
     merged = merged.rename(
         columns={
             "data_channels_value": "sample_measurement",
@@ -147,6 +179,7 @@ def transform_env_hourly_for_year(
     year: str,
     raw_env_sample_dir: Path,
     unique_monitors: pd.DataFrame,
+    pollutant_catalog: pd.DataFrame,
 ) -> pd.DataFrame:
     """Transform Envista hourly PM2.5 data for a specific year.
 
@@ -157,6 +190,7 @@ def transform_env_hourly_for_year(
         year: Four-digit year string (e.g. "2023").
         raw_env_sample_dir: Directory containing raw Envista hourly CSV files.
         unique_monitors: DataFrame with ``station_id`` and ``stations_tag`` columns.
+        pollutant_catalog: DataFrame containing pollutant information.
 
     Returns:
         Transformed DataFrame for the year.
@@ -170,4 +204,4 @@ def transform_env_hourly_for_year(
 
     print(f"  Found {len(raw_files)} Envista hourly file(s) for year {year}")
 
-    return transform_env_hourly(raw_files, unique_monitors)
+    return transform_env_hourly(raw_files, unique_monitors, pollutant_catalog)

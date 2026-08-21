@@ -21,25 +21,35 @@ sys.path.insert(0, str(ROOT / "src"))
 
 import config
 from envista.transformers.transform_env import transform_env_daily_for_year
+from envista.transformers.transform_env_hourly import transform_env_hourly_for_year
 from loaders.filesystem import write_csv
 
 def _load_envista_pollutant_data() -> pd.DataFrame:
     """Load dimPollutant data."""
-    
+
     df = pd.read_csv("ops/dimPollutant_Envista.csv", dtype=str)
     normalized_cols = {str(col).strip(): col for col in df.columns}
+    required_columns = [
+        "group_store",
+        "aqs_parameter_code",
+        "aqs_parameter",
+        "aqs_method_code",
+        "aqs_method",
+        "aqs_units",
+    ]
+    missing_columns = [column for column in required_columns if column not in normalized_cols]
 
-    if "group_store" in normalized_cols and "analyte_name_deq" in normalized_cols and "aqs_parameter" in normalized_cols:
-        df = df[[normalized_cols["group_store"], normalized_cols["analyte_name_deq"], normalized_cols["aqs_parameter"]]].copy()
-        df.columns = ["group_store", "analyte_name_deq", "aqs_parameter"]
-        df = df.dropna(subset=["group_store", "analyte_name_deq", "aqs_parameter"]).drop_duplicates()
-        df["group_store"] = df["group_store"].astype(str).str.strip()
-        df["analyte_name_deq"] = df["analyte_name_deq"].astype(str).str.strip()
-        df["aqs_parameter"] = df["aqs_parameter"].astype(str).str.strip()
+    if not missing_columns:
+        df = df[[normalized_cols[column] for column in required_columns]].copy()
+        df.columns = required_columns
+        df = df.dropna(subset=required_columns).drop_duplicates()
+        for column in required_columns:
+            df[column] = df[column].astype(str).str.strip()
         return df
 
-    raise FileNotFoundError(
-        "No Envista pollutant catalog file with group_store, analyte_name_deq, and aqs_parameter columns was found in ops/."
+    raise ValueError(
+        "Envista pollutant catalog is missing required columns: "
+        f"{', '.join(missing_columns)}"
     )
 
 def _parse_requested_filters(argv: list[str] | None = None) -> tuple[list[str] | None, str]:
@@ -175,8 +185,6 @@ def run(argv: list[str] | None = None) -> None:
             print(f"Raw hourly directory not found: {raw_hourly_dir}")
             print("Please run the hourly extraction pipeline first.")
             return
-
-        from envista.transformers.transform_env_hourly import transform_env_hourly_for_year
 
         for year in range(config.START_YEAR, config.END_YEAR + 1):
             year_str = str(year)

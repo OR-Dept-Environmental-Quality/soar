@@ -1,3 +1,3 @@
-group_store, analyte_group,analyte_name_deq,aqs_parameter,monitor_name
-pm25,PM25,"PM2.5 Est SensOR",88502,"PM2.5 Est SensOR"
-carb_aero,Carb_aero,"Biomass Burning Percent",NA,"Aeth %BB"
+group_store, analyte_group,env_monitor_name,aqs_parameter_code,aqs_parameter,aqs_method_code,aqs_method,aqs_units
+pm25,PM25,"PM2.5 Est SensOR",88502,"Acceptable PM2.5 AQI & Speciation Mass",999,"PM2.5 Est SensOR","Micrograms per cubic meter (LC)"
+carb_aero,Carb_aero,"Aeth %BB",NA,"Biomass Burning Percent",894,"Magee AE33/ TAPI M633 Aethalometer","Percent"
