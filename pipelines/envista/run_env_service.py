@@ -198,7 +198,7 @@ def _process_site_year(
         return station_id, channel_id, year, 0, False
 
 
-def _process_hourly_year(
+def _process_sample_year(
     year: str, sites: list[dict], site_workers: int
 ) -> int:
     """Process all hourly site extractions for a single year."""
@@ -267,13 +267,13 @@ def _process_daily_year(
 def run_sample_service(
     years: list[str], sites: list[dict]
 ) -> None:
-    """Run hourly Envista sample data extraction concurrently by year and site."""
+    """Run Envista sample data extraction concurrently by year and site."""
     logger = get_logger(__name__)
 
     _combined_sample_results.clear()
 
     print("\n" + "=" * 60)
-    print("STARTING ENVISTA HOURLY SAMPLE SERVICE (PM2.5 SensOR)")
+    print("STARTING ENVISTA SAMPLE SERVICE")
     print("=" * 60)
 
     total_sample_rows = 0
@@ -281,7 +281,7 @@ def run_sample_service(
     with ThreadPoolExecutor(max_workers=ENV_SAMPLE_YEAR_WORKERS) as executor:
         futures = [
             executor.submit(
-                _process_hourly_year,
+                _process_sample_year,
                 year,
                 sites,
                 ENV_SAMPLE_SITE_WORKERS,
@@ -292,7 +292,7 @@ def run_sample_service(
         for future in futures:
             total_sample_rows += future.result()
 
-    logger.info(f"Hourly sample service complete: {total_sample_rows} total hourly rows extracted.")
+    logger.info(f"Sample service complete: {total_sample_rows} total sample rows extracted.")
 
     config.ensure_dirs(ENV_SAMPLE_DIR)
     for (group_store, year), df in _combined_sample_results.items():
@@ -305,23 +305,23 @@ def run_sample_service(
             logger.warning(f"Skipping {group_store} year {year}: All columns contain only NA values")
             continue
 
-        output_file = ENV_SAMPLE_DIR / f"env_hourly_{group_store}_{year}.csv"
+        output_file = ENV_SAMPLE_DIR / f"env_sample_{group_store}_{year}.csv"
         write_csv(df, output_file)
         logger.info(f"Exported {len(df)} rows for {group_store} year {year} to {output_file}")
 
-    print(f"\n[COMPLETE] HOURLY SAMPLE SERVICE COMPLETE: {total_sample_rows} total hourly rows extracted.\n")
+    print(f"\n[COMPLETE] SAMPLE SERVICE COMPLETE: {total_sample_rows} total sample rows extracted.\n")
 
 
 def run_daily_service(
     years: list[str], sites: list[dict]
 ) -> None:
-    """Run daily Envista sample data extraction concurrently by year and site."""
+    """Run Envista daily data extraction concurrently by year and site."""
     logger = get_logger(__name__)
 
     _combined_daily_results.clear()
 
     print("\n" + "=" * 60)
-    print("STARTING ENVISTA DAILY SAMPLE SERVICE (PM2.5 SensOR)")
+    print("STARTING ENVISTA DAILY SERVICE")
     print("=" * 60)
 
     total_daily_rows = 0
@@ -340,7 +340,7 @@ def run_daily_service(
         for future in futures:
             total_daily_rows += future.result()
 
-    logger.info(f"Daily sample service complete: {total_daily_rows} total daily rows extracted.")
+    logger.info(f"Daily service complete: {total_daily_rows} total daily rows extracted.")
 
     config.ensure_dirs(ENV_DAILY_DIR)
     for (group_store, year), df in _combined_daily_results.items():
@@ -357,7 +357,7 @@ def run_daily_service(
         write_csv(df, output_file)
         logger.info(f"Exported {len(df)} daily rows for {group_store} year {year} to {output_file}")
 
-    print(f"\n[COMPLETE] DAILY SAMPLE SERVICE COMPLETE: {total_daily_rows} total daily rows extracted.\n")
+    print(f"\n[COMPLETE] DAILY SERVICE COMPLETE: {total_daily_rows} total daily rows extracted.\n")
 
 
 def main(argv: list[str] | None = None) -> None:
