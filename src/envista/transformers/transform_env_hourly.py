@@ -104,6 +104,9 @@ def transform_env_hourly(
     merged["date_local"] = dt.dt.strftime("%Y-%m-%d")
     merged["time_local"] = dt.dt.strftime("%H:%M")
 
+    #filter out invalid data
+    merged = merged[merged["data_channels_valid"] == "TRUE"]
+
     # Map boolean validity to Y/N strings
     merged["validity_indicator"] = merged["data_channels_value"].map(
         lambda _: pd.NA  # placeholder; overwritten below
