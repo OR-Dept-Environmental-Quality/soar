@@ -10,7 +10,7 @@ from pathlib import Path
 from .calculate_aqi import calculate_aqi
 import pandas as pd
 
-def transform_env_daily(year: str, raw_daily_files: list[Path], unique_monitors: pd.DataFrame) -> pd.DataFrame:
+def transform_env_daily(raw_daily_files: list[Path], unique_monitors: pd.DataFrame, pollutant_catalog: pd.DataFrame) -> pd.DataFrame:
     """Transform raw Envista daily data for a given year.
 
     This function reads the raw daily data from the specified input path,
@@ -20,6 +20,7 @@ def transform_env_daily(year: str, raw_daily_files: list[Path], unique_monitors:
     Args:
         input_path (Path): Path to the raw daily data CSV file.
         unique_monitors (pd.DataFrame): DataFrame containing unique monitor information.
+        pollutant_catalog (pd.DataFrame): DataFrame containing pollutant information.
 
     Returns:
         pd.DataFrame: Transformed and cleaned DataFrame.
@@ -90,7 +91,13 @@ def transform_env_daily(year: str, raw_daily_files: list[Path], unique_monitors:
                 "date_local", "units_of_measure", "event_type", "observation_count", "observation_percent", "validity_indicator", 
                 "arithmetic_mean", "first_max_value", "first_max_hour", "aqi", "method_code", "method", "site_code"]]
 
-def transform_env_daily_for_year(year: str, raw_daily_dir: Path, unique_monitors: pd.DataFrame) -> pd.DataFrame:
+def transform_env_daily_for_year(
+    year: str,
+    raw_daily_dir: Path,
+    unique_monitors: pd.DataFrame,
+    pollutant_catalog: pd.DataFrame | None = None,
+    requested_group_stores: list[str] | None = None,
+) -> pd.DataFrame:
     """Transform Envista daily data for a specific year.
 
     Finds all daily files for the given year, combines them, and applies transformations.
@@ -98,6 +105,9 @@ def transform_env_daily_for_year(year: str, raw_daily_dir: Path, unique_monitors
     Args:
         year: Year string (e.g., "2023")
         raw_daily_dir: Directory containing raw daily files
+        unique_monitors: Monitor metadata keyed by station_id
+        pollutant_catalog: Optional pollutant catalog used to filter by group_store
+        requested_group_stores: Optional subset of group_store names to include
 
     Returns:
         Transformed DataFrame for the year
@@ -107,6 +117,16 @@ def transform_env_daily_for_year(year: str, raw_daily_dir: Path, unique_monitors
     pattern = f"env_daily_*_{year}.csv"
     daily_files = list(raw_daily_dir.glob(pattern))
 
+    if requested_group_stores:
+        requested_norm = {value.casefold() for value in requested_group_stores}
+        daily_files = [
+            file_path for file_path in daily_files
+            if any(
+                group_name.casefold() in file_path.name.casefold()
+                for group_name in requested_norm
+            )
+        ]
+
     if not daily_files:
         print(f"No daily files found for year {year}")
         return pd.DataFrame()
@@ -115,4 +135,4 @@ def transform_env_daily_for_year(year: str, raw_daily_dir: Path, unique_monitors
     for file_path in daily_files:
         print(f"{file_path.name}")
 
-    return transform_env_daily(year, daily_files, unique_monitors)
+    return transform_env_daily(daily_files, unique_monitors, pollutant_catalog or pd.DataFrame())
