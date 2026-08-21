@@ -33,17 +33,16 @@ from envista.extractors.measurements import get_envista_hourly, get_envista_dail
 
 ENV_TEST_MODE = str(config.ENV_TEST_MODE).lower() in ("1", "true", "yes")
 ENV_MONITOR_DIR = config.RAW_ENV_MONITORS
-ENV_SAMPLE_DIR = config.RAW_ENV_SAMPLE
+ENV_HOURLY_DIR = config.RAW_ENV_HOURLY
 ENV_DAILY_DIR = config.RAW_ENV_DAILY
 
 BDATE = config.BDATE
 EDATE = config.EDATE
-ENV_SAMPLE_YEAR_WORKERS = max(1, int(os.getenv("ENV_SAMPLE_YEAR_WORKERS", "3")))
-ENV_SAMPLE_SITE_WORKERS = max(1, int(os.getenv("ENV_SAMPLE_SITE_WORKERS", "3")))
+ENV_WORKERS = max(1, int(os.getenv("ENV_WORKERS", "3")))
 
 _session_local = threading.local()
 _data_lock = threading.Lock()
-_combined_sample_results: dict[tuple[str, str], pd.DataFrame] = {}  # Key format: (group_store, year)
+_combined_hourly_results: dict[tuple[str, str], pd.DataFrame] = {}  # Key format: (group_store, year)
 _combined_daily_results: dict[tuple[str, str], pd.DataFrame] = {}  # Key format: (group_store, year)
 
 if BDATE < date(2018, 7, 1): BDATE = date(2018, 7, 1)  # Envista data starts mid-2018
@@ -147,7 +146,7 @@ def _process_parameter_for_year(
                 from_date=from_date,
                 to_date=to_date,
             )
-            storage_dict = _combined_sample_results
+            storage_dict = _combined_hourly_results
             storage_label = "hourly"
         else:
             data = get_envista_daily(
@@ -221,7 +220,7 @@ def _filter_sites_for_year(year: str, sites: list[dict]) -> list[dict]:
     return filtered_sites
 
 
-def _process_sample_year(
+def _process_hourly_year(
     year: str, sites: list[dict], site_workers: int
 ) -> int:
     """Process all hourly site extractions for a single year."""
@@ -289,38 +288,38 @@ def _process_daily_year(
     return year_total_rows
 
 
-def run_sample_service(
+def run_hourly_service(
     years: list[str], sites: list[dict]
 ) -> None:
-    """Run Envista sample data extraction concurrently by year and site."""
+    """Run Envista hourly data extraction concurrently by year and site."""
     logger = get_logger(__name__)
 
-    _combined_sample_results.clear()
+    _combined_hourly_results.clear()
 
     print("\n" + "=" * 60)
-    print("STARTING ENVISTA SAMPLE SERVICE")
+    print("STARTING ENVISTA HOURLY SERVICE")
     print("=" * 60)
 
-    total_sample_rows = 0
+    total_hourly_rows = 0
 
-    with ThreadPoolExecutor(max_workers=ENV_SAMPLE_YEAR_WORKERS) as executor:
+    with ThreadPoolExecutor(max_workers=ENV_WORKERS) as executor:
         futures = [
             executor.submit(
-                _process_sample_year,
+                _process_hourly_year,
                 year,
                 sites,
-                ENV_SAMPLE_SITE_WORKERS,
+                ENV_WORKERS,
             )
             for year in years
         ]
 
         for future in futures:
-            total_sample_rows += future.result()
+            total_hourly_rows += future.result()
 
-    logger.info(f"Sample service complete: {total_sample_rows} total sample rows extracted.")
+    logger.info(f"Hourly service complete: {total_hourly_rows} total hourly rows extracted.")
 
-    config.ensure_dirs(ENV_SAMPLE_DIR)
-    for (group_store, year), df in _combined_sample_results.items():
+    config.ensure_dirs(ENV_HOURLY_DIR)
+    for (group_store, year), df in _combined_hourly_results.items():
         if df.empty:
             logger.warning(f"Skipping {group_store} year {year}: DataFrame is empty")
             continue
@@ -330,11 +329,11 @@ def run_sample_service(
             logger.warning(f"Skipping {group_store} year {year}: All columns contain only NA values")
             continue
 
-        output_file = ENV_SAMPLE_DIR / f"env_sample_{group_store}_{year}.csv"
+        output_file = ENV_HOURLY_DIR / f"env_hourly_{group_store}_{year}.csv"
         write_csv(df, output_file)
         logger.info(f"Exported {len(df)} rows for {group_store} year {year} to {output_file}")
 
-    print(f"\n[COMPLETE] SAMPLE SERVICE COMPLETE: {total_sample_rows} total sample rows extracted.\n")
+    print(f"\n[COMPLETE] HOURLY SERVICE COMPLETE: {total_hourly_rows} total hourly rows extracted.\n")
 
 
 def run_daily_service(
@@ -351,13 +350,13 @@ def run_daily_service(
 
     total_daily_rows = 0
 
-    with ThreadPoolExecutor(max_workers=ENV_SAMPLE_YEAR_WORKERS) as executor:
+    with ThreadPoolExecutor(max_workers=ENV_WORKERS) as executor:
         futures = [
             executor.submit(
                 _process_daily_year,
                 year,
                 sites,
-                ENV_SAMPLE_SITE_WORKERS,
+                ENV_WORKERS,
             )
             for year in years
         ]
@@ -477,7 +476,7 @@ def main(argv: list[str] | None = None) -> None:
 
     try:
         if requested_service in {"hourly", "both"}:
-            run_sample_service(years, monitored_sites)
+            run_hourly_service(years, monitored_sites)
         if requested_service in {"daily", "both"}:
             run_daily_service(years, monitored_sites)
 
