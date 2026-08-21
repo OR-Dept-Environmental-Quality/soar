@@ -198,12 +198,34 @@ def _process_parameter_for_year(
         return station_id, channel_id, year, 0, False
 
 
+def _filter_sites_for_year(year: str, sites: list[dict]) -> list[dict]:
+    """Return only the sites whose mon_start_date year is on or before the selected year."""
+    year_num = int(year)
+    filtered_sites: list[dict] = []
+
+    for site in sites:
+        mon_start_date = site.get("mon_start_date")
+        if mon_start_date in (None, "", pd.NaT):
+            continue
+
+        try:
+            start_year = pd.to_datetime(mon_start_date).year
+        except (TypeError, ValueError):
+            continue
+
+        if start_year <= year_num:
+            filtered_sites.append(site)
+
+    return filtered_sites
+
+
 def _process_sample_year(
     year: str, sites: list[dict], site_workers: int
 ) -> int:
     """Process all hourly site extractions for a single year."""
     logger = get_logger(__name__)
-    logger.info(f"Processing {len(sites)} sites concurrently for hourly data in {year}")
+    eligible_sites = _filter_sites_for_year(year, sites)
+    logger.info(f"Processing {len(eligible_sites)} eligible sites concurrently for hourly data in {year}")
 
     year_total_rows = 0
 
@@ -219,7 +241,7 @@ def _process_sample_year(
                 str(site.get('group_store', 'unknown')),
                 "hourly",
             )
-            for site in sites
+            for site in eligible_sites
         ]
 
         for future in futures:
@@ -236,7 +258,8 @@ def _process_daily_year(
 ) -> int:
     """Process all daily site extractions for a single year."""
     logger = get_logger(__name__)
-    logger.info(f"Processing {len(sites)} sites concurrently for daily data in {year}")
+    eligible_sites = _filter_sites_for_year(year, sites)
+    logger.info(f"Processing {len(eligible_sites)} eligible sites concurrently for daily data in {year}")
 
     year_total_rows = 0
 
@@ -252,7 +275,7 @@ def _process_daily_year(
                 str(site.get('group_store', 'unknown')),
                 "daily",
             )
-            for site in sites
+            for site in eligible_sites
         ]
 
         for future in futures:
@@ -422,7 +445,7 @@ def main(argv: list[str] | None = None) -> None:
         logger.info(f"Applied group_store filter: {requested_group_stores}")
 
     monitored_sites = (
-        selected_sites[['name', 'station_id', 'monitor_name', 'channel_id', 'group_store']]
+        selected_sites[['name', 'station_id', 'monitor_name', 'channel_id', 'mon_start_date', 'group_store']]
         .drop_duplicates()
         .to_dict('records')
     )
