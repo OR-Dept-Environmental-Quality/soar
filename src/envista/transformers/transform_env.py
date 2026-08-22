@@ -135,4 +135,4 @@ def transform_env_daily_for_year(
     for file_path in daily_files:
         print(f"{file_path.name}")
 
-    return transform_env_daily(daily_files, unique_monitors, pollutant_catalog or pd.DataFrame())
+    return transform_env_daily(daily_files, unique_monitors, pollutant_catalog)

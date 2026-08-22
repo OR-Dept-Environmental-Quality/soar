@@ -12,16 +12,8 @@ from typing import List
 
 import pandas as pd
 
-
-def _infer_group_store_from_filename(file_path: Path) -> str | None:
-    """Infer the Envista group_store from a raw hourly filename."""
-    match = re.match(r"^env_hourly_(.+)_(\d{4})$", file_path.stem, flags=re.IGNORECASE)
-    if match:
-        return match.group(1)
-    return None
-
-
 # Default fixed field values that align Envista data with AQS parameter conventions
+_POC = 999
 _SAMPLE_DURATION_CODE = "1"
 _SAMPLE_DURATION = "1 HOUR"
 _SOURCE = "Envista"
@@ -43,6 +35,13 @@ _OUTPUT_COLUMNS = [
     "qualifier",
     "source",
 ]
+
+def _infer_group_store_from_filename(file_path: Path) -> str | None:
+    """Infer the Envista group_store from a raw hourly filename."""
+    match = re.match(r"^env_hourly_(.+)_(\d{4})$", file_path.stem, flags=re.IGNORECASE)
+    if match:
+        return match.group(1)
+    return None
 
 
 def transform_env_hourly(
@@ -99,11 +98,11 @@ def transform_env_hourly(
         ].drop_duplicates()
         for row in catalog.itertuples(index=False):
             pollutant_lookup[str(row.group_store).strip()] = {
-                "parameter_code": str(row.aqs_parameter_code).strip() if pd.notna(row.aqs_parameter_code) else None,
-                "parameter": str(row.aqs_parameter).strip() if pd.notna(row.aqs_parameter) else None,
-                "method_code": str(row.aqs_method_code).strip() if pd.notna(row.aqs_method_code) else None,
-                "method": str(row.aqs_method).strip() if pd.notna(row.aqs_method) else None,
-                "units_of_measure": str(row.aqs_units).strip() if pd.notna(row.aqs_units) else None,
+                "parameter_code": str(row.aqs_parameter_code).strip() if pd.notna(row.aqs_parameter_code) else "No value",
+                "parameter": str(row.aqs_parameter).strip() if pd.notna(row.aqs_parameter) else "No value",
+                "method_code": str(row.aqs_method_code).strip() if pd.notna(row.aqs_method_code) else "No value",
+                "method": str(row.aqs_method).strip() if pd.notna(row.aqs_method) else "No value",
+                "units_of_measure": str(row.aqs_units).strip() if pd.notna(row.aqs_units) else "No value",
             }
 
     # Drop sentinel missing-value rows
@@ -123,19 +122,19 @@ def transform_env_hourly(
     merged["group_store"] = merged["group_store"].astype(str)
     if pollutant_lookup:
         merged["parameter_code"] = merged["group_store"].map(
-            lambda value: pollutant_lookup.get(value, {}).get("parameter_code", None)
+            lambda value: pollutant_lookup.get(value, {}).get("parameter_code")
         )
         merged["parameter"] = merged["group_store"].map(
-            lambda value: pollutant_lookup.get(value, {}).get("parameter", None)
+            lambda value: pollutant_lookup.get(value, {}).get("parameter")
         )
         merged["method_code"] = merged["group_store"].map(
-            lambda value: pollutant_lookup.get(value, {}).get("method_code", None)
+            lambda value: pollutant_lookup.get(value, {}).get("method_code")
         )
         merged["method"] = merged["group_store"].map(
-            lambda value: pollutant_lookup.get(value, {}).get("method", None)
+            lambda value: pollutant_lookup.get(value, {}).get("method")
         )
         merged["units_of_measure"] = merged["group_store"].map(
-            lambda value: pollutant_lookup.get(value, {}).get("units_of_measure", None)
+            lambda value: pollutant_lookup.get(value, {}).get("units_of_measure")
         )
     else:
         merged["parameter_code"] = None
