@@ -64,9 +64,9 @@ def _parse_requested_filters(argv: list[str] | None = None) -> tuple[list[str] |
     )
     parser.add_argument(
         "--service",
-        choices=["hourly", "daily", "both"],
+        choices=["sample", "hourly", "daily", "both"],
         default=None,
-        help="Which Envista service to run: hourly, daily, or both",
+        help="Which Envista service to run: sample, daily, or both",
     )
     args, _ = parser.parse_known_args(argv)
 
@@ -95,10 +95,13 @@ def _parse_requested_filters(argv: list[str] | None = None) -> tuple[list[str] |
         requested_group_stores = None
 
     if args.service:
-        requested_service = args.service
+        requested_service = "sample" if args.service == "hourly" else args.service
     else:
         env_service_value = os.getenv("ENV_SERVICE", "").strip().casefold()
-        requested_service = env_service_value if env_service_value in {"hourly", "daily", "both"} else "both"
+        if env_service_value == "hourly":
+            requested_service = "sample"
+        else:
+            requested_service = env_service_value if env_service_value in {"sample", "daily", "both"} else "both"
 
     return requested_group_stores, requested_service
 
@@ -118,9 +121,9 @@ def run(argv: list[str] | None = None) -> None:
 
     raw_monitors_dir = config.RAW_ENV_MONITORS
     raw_daily_dir = config.RAW_ENV_DAILY
-    raw_hourly_dir = config.RAW_ENV_HOURLY
+    raw_sample_dir = config.RAW_ENV_SAMPLE
     trans_daily_dir = config.TRANS_DAILY
-    trans_hourly_dir = config.TRANS_SAMPLE
+    trans_sample_dir = config.TRANS_SAMPLE
     trans_aqi_dir = config.TRANS_AQI
 
     if not raw_monitors_dir.exists():
@@ -132,8 +135,8 @@ def run(argv: list[str] | None = None) -> None:
     if not trans_daily_dir.exists():
         trans_daily_dir.mkdir(parents=True, exist_ok=True)
 
-    if not trans_hourly_dir.exists():
-        trans_hourly_dir.mkdir(parents=True, exist_ok=True)
+    if not trans_sample_dir.exists():
+        trans_sample_dir.mkdir(parents=True, exist_ok=True)
 
     # Create unique monitor and channel table
     print("Creating unique monitor and channel tables")
@@ -180,33 +183,33 @@ def run(argv: list[str] | None = None) -> None:
             years_processed += 1
             total_records += len(transform_daily_df)
 
-    if requested_service in {"hourly", "both"}:
-        if not raw_hourly_dir.exists():
-            print(f"Raw hourly directory not found: {raw_hourly_dir}")
-            print("Please run the hourly extraction pipeline first.")
+    if requested_service in {"sample", "both"}:
+        if not raw_sample_dir.exists():
+            print(f"Raw sample directory not found: {raw_sample_dir}")
+            print("Please run the sample extraction pipeline first.")
             return
 
         for year in range(config.START_YEAR, config.END_YEAR + 1):
             year_str = str(year)
-            print(f"\nProcessing hourly year {year_str}...")
+            print(f"\nProcessing sample year {year_str}...")
 
-            transform_hourly_df = transform_env_hourly_for_year(
+            transform_sample_df = transform_env_hourly_for_year(
                 year_str,
-                raw_hourly_dir,
+                raw_sample_dir,
                 unique_monitors,
                 pollutant_catalog,
             )
 
-            if transform_hourly_df.empty:
-                print(f"No hourly data for year {year_str}, skipping")
+            if transform_sample_df.empty:
+                print(f"No sample data for year {year_str}, skipping")
                 continue
 
-            hourly_output_path = trans_hourly_dir / f"hourly_envista_{year_str}.csv"
-            write_csv(transform_hourly_df, hourly_output_path)
-            print(f"Wrote {len(transform_hourly_df)} hourly records to {hourly_output_path}")
+            sample_output_path = trans_sample_dir / f"sample_envista_{year_str}.csv"
+            write_csv(transform_sample_df, sample_output_path)
+            print(f"Wrote {len(transform_sample_df)} sample records to {sample_output_path}")
 
             years_processed += 1
-            total_records += len(transform_hourly_df)
+            total_records += len(transform_sample_df)
 
     print("\nEnvista transformation complete!")
     print(f"Processed {years_processed} year blocks with {total_records} total records")

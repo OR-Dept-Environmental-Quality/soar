@@ -34,9 +34,9 @@ def _get_session() -> requests.Session:
     return session
 
 def get_envista_hourly(station_id: str, channel_id: str, from_date: str, to_date: str) -> pd.DataFrame | None:
-    """Retrieve Envista measurement data for a specific site and channel.
+    """Retrieve Envista sample measurement data for a specific site and channel.
 
-    Fetches hourly measurement data from a specific station's channel over
+    Fetches sample measurement data from a specific station's channel over
     a specified date range. Uses centralized _env_client for rate limiting,
     retries, and circuit breaker.
 

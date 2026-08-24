@@ -33,7 +33,7 @@ from envista.extractors.measurements import get_envista_hourly, get_envista_dail
 
 ENV_TEST_MODE = str(config.ENV_TEST_MODE).lower() in ("1", "true", "yes")
 ENV_MONITOR_DIR = config.RAW_ENV_MONITORS
-ENV_HOURLY_DIR = config.RAW_ENV_HOURLY
+ENV_SAMPLE_DIR = config.RAW_ENV_SAMPLE
 ENV_DAILY_DIR = config.RAW_ENV_DAILY
 
 BDATE = config.BDATE
@@ -42,7 +42,7 @@ ENV_WORKERS = max(1, int(os.getenv("ENV_WORKERS", "3")))
 
 _session_local = threading.local()
 _data_lock = threading.Lock()
-_combined_hourly_results: dict[tuple[str, str], pd.DataFrame] = {}  # Key format: (group_store, year)
+_combined_sample_results: dict[tuple[str, str], pd.DataFrame] = {}  # Key format: (group_store, year)
 _combined_daily_results: dict[tuple[str, str], pd.DataFrame] = {}  # Key format: (group_store, year)
 
 if BDATE < date(2018, 7, 1): BDATE = date(2018, 7, 1)  # Envista data starts mid-2018
@@ -79,9 +79,9 @@ def _parse_requested_filters(argv: list[str] | None = None) -> tuple[list[str] |
     )
     parser.add_argument(
         "--service",
-        choices=["hourly", "daily", "both"],
+        choices=["sample", "hourly", "daily", "both"],
         default=None,
-        help="Which Envista service to run: hourly, daily, or both",
+        help="Which Envista service to run: sample, daily, or both",
     )
     args, _ = parser.parse_known_args(argv)
 
@@ -110,10 +110,13 @@ def _parse_requested_filters(argv: list[str] | None = None) -> tuple[list[str] |
         requested_group_stores = None
 
     if args.service:
-        requested_service = args.service
+        requested_service = "sample" if args.service == "hourly" else args.service
     else:
         env_service_value = os.getenv("ENV_SERVICE", "").strip().casefold()
-        requested_service = env_service_value if env_service_value in {"hourly", "daily", "both"} else "both"
+        if env_service_value == "hourly":
+            requested_service = "sample"
+        else:
+            requested_service = env_service_value if env_service_value in {"sample", "daily", "both"} else "both"
 
     return requested_group_stores, requested_service
 
@@ -130,8 +133,8 @@ def _process_parameter_for_year(
     """Extract Envista data for one site and one calendar year, by selected service."""
     from_date = f"{year}-01-01"
     to_date = f"{year}-12-31"
-    if service == "hourly":
-        to_date = f"{str(int(year) + 1)}-01-01"  # Inclusive end date for hourly data for the selected year
+    if service == "sample":
+        to_date = f"{str(int(year) + 1)}-01-01"  # Inclusive end date for sample data for the selected year
 
     logger = get_logger(__name__)
     logger.debug(
@@ -139,15 +142,15 @@ def _process_parameter_for_year(
     )
 
     try:
-        if service == "hourly":
+        if service == "sample":
             data = get_envista_hourly(
                 station_id=station_id,
                 channel_id=channel_id,
                 from_date=from_date,
                 to_date=to_date,
             )
-            storage_dict = _combined_hourly_results
-            storage_label = "hourly"
+            storage_dict = _combined_sample_results
+            storage_label = "sample"
         else:
             data = get_envista_daily(
                 station_id=station_id,
@@ -199,12 +202,12 @@ def _process_parameter_for_year(
         return station_id, channel_id, year, 0, False
 
 
-def _process_hourly_year(
+def _process_sample_year(
     year: str, sites: list[dict], site_workers: int
 ) -> int:
-    """Process all hourly site extractions for a single year."""
+    """Process all sample site extractions for a single year."""
     logger = get_logger(__name__)
-    logger.info(f"Processing {len(sites)} sites concurrently for hourly data in {year}")
+    logger.info(f"Processing {len(sites)} sites concurrently for sample data in {year}")
 
     year_total_rows = 0
 
@@ -218,17 +221,17 @@ def _process_hourly_year(
                 str(site['channel_id']),
                 year,
                 str(site.get('group_store', 'unknown')),
-                "hourly",
+                "sample",
             )
             for site in sites
         ]
 
         for future in futures:
-            _, _, _, hourly_rows, succeeded = future.result()
+            _, _, _, sample_rows, succeeded = future.result()
             if succeeded:
-                year_total_rows += hourly_rows
+                year_total_rows += sample_rows
 
-    logger.info(f"Completed hourly processing for {year}: {year_total_rows} total rows.")
+    logger.info(f"Completed sample processing for {year}: {year_total_rows} total rows.")
     return year_total_rows
 
 
@@ -265,24 +268,24 @@ def _process_daily_year(
     return year_total_rows
 
 
-def run_hourly_service(
+def run_sample_service(
     years: list[str], sites: list[dict]
 ) -> None:
-    """Run Envista hourly data extraction concurrently by year and site."""
+    """Run Envista sample data extraction concurrently by year and site."""
     logger = get_logger(__name__)
 
-    _combined_hourly_results.clear()
+    _combined_sample_results.clear()
 
     print("\n" + "=" * 60)
-    print("STARTING ENVISTA HOURLY SERVICE")
+    print("STARTING ENVISTA SAMPLE SERVICE")
     print("=" * 60)
 
-    total_hourly_rows = 0
+    total_sample_rows = 0
 
     with ThreadPoolExecutor(max_workers=ENV_WORKERS) as executor:
         futures = [
             executor.submit(
-                _process_hourly_year,
+                _process_sample_year,
                 year,
                 sites,
                 ENV_WORKERS,
@@ -291,12 +294,12 @@ def run_hourly_service(
         ]
 
         for future in futures:
-            total_hourly_rows += future.result()
+            total_sample_rows += future.result()
 
-    logger.info(f"Hourly service complete: {total_hourly_rows} total hourly rows extracted.")
+    logger.info(f"Sample service complete: {total_sample_rows} total sample rows extracted.")
 
-    config.ensure_dirs(ENV_HOURLY_DIR)
-    for (group_store, year), df in _combined_hourly_results.items():
+    config.ensure_dirs(ENV_SAMPLE_DIR)
+    for (group_store, year), df in _combined_sample_results.items():
         if df.empty:
             logger.warning(f"Skipping {group_store} year {year}: DataFrame is empty")
             continue
@@ -306,11 +309,11 @@ def run_hourly_service(
             logger.warning(f"Skipping {group_store} year {year}: All columns contain only NA values")
             continue
 
-        output_file = ENV_HOURLY_DIR / f"env_hourly_{group_store}_{year}.csv"
+        output_file = ENV_SAMPLE_DIR / f"env_sample_{group_store}_{year}.csv"
         write_csv(df, output_file)
         logger.info(f"Exported {len(df)} rows for {group_store} year {year} to {output_file}")
 
-    print(f"\n[COMPLETE] HOURLY SERVICE COMPLETE: {total_hourly_rows} total hourly rows extracted.\n")
+    print(f"\n[COMPLETE] SAMPLE SERVICE COMPLETE: {total_sample_rows} total sample rows extracted.\n")
 
 
 def run_daily_service(
@@ -452,8 +455,8 @@ def main(argv: list[str] | None = None) -> None:
     logger.info(f"Processing {len(monitored_sites)} configured sites across {len(years)} years")
 
     try:
-        if requested_service in {"hourly", "both"}:
-            run_hourly_service(years, monitored_sites)
+        if requested_service in {"sample", "both"}:
+            run_sample_service(years, monitored_sites)
         if requested_service in {"daily", "both"}:
             run_daily_service(years, monitored_sites)
 

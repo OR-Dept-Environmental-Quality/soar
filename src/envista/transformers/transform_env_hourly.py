@@ -1,7 +1,7 @@
-"""Transformers for Envista hourly (sample) data.
+"""Transformers for Envista sample data.
 
-This module provides functions to transform raw Envista hourly PM2.5 data
-into cleaned hourly records with a schema matching the AQS hourly fact table.
+This module provides functions to transform raw Envista sample PM2.5 data
+into cleaned sample records with a schema matching the AQS sample fact table.
 """
 
 from __future__ import annotations
@@ -37,7 +37,7 @@ _OUTPUT_COLUMNS = [
 ]
 
 def _infer_group_store_from_filename(file_path: Path) -> str | None:
-    """Infer the Envista group_store from a raw hourly filename."""
+    """Infer the Envista group_store from a raw sample filename."""
     match = re.match(r"^env_hourly_(.+)_(\d{4})$", file_path.stem, flags=re.IGNORECASE)
     if match:
         return match.group(1)
@@ -49,9 +49,9 @@ def transform_env_hourly(
     unique_monitors: pd.DataFrame,
     pollutant_catalog: pd.DataFrame,
 ) -> pd.DataFrame:
-    """Transform raw Envista hourly PM2.5 files into hourly records.
+    """Transform raw Envista sample PM2.5 files into sample records.
 
-    Reads one or more raw Envista hourly CSV files, filters out sentinel
+    Reads one or more raw Envista sample CSV files, filters out sentinel
     -9999 values, joins to monitor metadata to obtain site_code, splits
     the datetime into date_local and time_local, maps the validity flag,
     and populates fixed AQS-convention fields.
@@ -169,7 +169,7 @@ def transform_env_hourly(
     result = merged[_OUTPUT_COLUMNS].copy()
     result = result.drop_duplicates()
 
-    print(f"  Transformed {len(result)} Envista hourly records")
+    print(f"  Transformed {len(result)} Envista sample records")
 
     return result
 
@@ -180,7 +180,7 @@ def transform_env_hourly_for_year(
     unique_monitors: pd.DataFrame,
     pollutant_catalog: pd.DataFrame,
 ) -> pd.DataFrame:
-    """Transform Envista hourly PM2.5 data for a specific year.
+    """Transform Envista sample PM2.5 data for a specific year.
 
     Globs all files matching env_hourly_pm25_{year}.csv in raw_env_sample_dir,
     then delegates to transform_env_hourly.
@@ -198,9 +198,9 @@ def transform_env_hourly_for_year(
     raw_files = list(raw_env_sample_dir.glob(pattern))
 
     if not raw_files:
-        print(f"  No Envista hourly files found for year {year} in {raw_env_sample_dir}")
+        print(f"  No Envista sample files found for year {year} in {raw_env_sample_dir}")
         return pd.DataFrame()
 
-    print(f"  Found {len(raw_files)} Envista hourly file(s) for year {year}")
+    print(f"  Found {len(raw_files)} Envista sample file(s) for year {year}")
 
     return transform_env_hourly(raw_files, unique_monitors, pollutant_catalog)
