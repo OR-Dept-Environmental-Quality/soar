@@ -64,10 +64,10 @@ def _parse_requested_filters(argv: list[str] | None = None) -> tuple[list[str] |
     )
     parser.add_argument(
         "--service",
-        choices=["sample", "hourly", "daily"],
+        choices=["sample", "daily"],
         nargs="+",
         default=None,
-        help="One or more Envista services to run: sample, hourly, or daily",
+        help="One or more Envista services to run: sample or daily",
     )
     args, _ = parser.parse_known_args(argv)
 
@@ -103,8 +103,6 @@ def _parse_requested_filters(argv: list[str] | None = None) -> tuple[list[str] |
     requested_services = []
     for value in raw_service_values:
         service = value.strip().casefold()
-        if service == "hourly":
-            service = "sample"
         if service in {"sample", "daily"} and service not in requested_services:
             requested_services.append(service)
 
