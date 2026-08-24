@@ -401,3 +401,26 @@ class TestDateFormatAndAQIIntegration:
         
         assert not before_cutoff.empty
         assert not after_cutoff.empty
+
+    def test_transform_env_daily_skips_aqi_for_non_pm25_group_store(self, tmp_path):
+        """Non-PM2.5 Envista files should keep AQI as blank instead of running the PM2.5 formula."""
+        df_envista = pd.DataFrame({
+            "data_datetime": ["2024-05-07T10:00:00"],
+            "data_channels_value": [12.0],
+            "data_channels_name": ["OZONE"],
+            "data_channels_valid": [True],
+            "stationId": ["SITE001"],
+        })
+
+        df_monitors = pd.DataFrame({
+            "station_id": ["SITE001"],
+            "stations_tag": ["TEST_SITE"],
+        })
+
+        input_file = tmp_path / "env_daily_ozone_2024.csv"
+        df_envista.to_csv(input_file, index=False)
+
+        result = transform_env_daily([input_file], df_monitors, pd.DataFrame())
+
+        assert "aqi" in result.columns
+        assert result["aqi"].isna().all()

@@ -164,6 +164,7 @@ def transform_env_daily(raw_daily_files: list[Path], unique_monitors: pd.DataFra
     merged["observation_percent"] = _OBSERVATION_PERCENT
     merged["first_max_value"] = _FIRST_MAX_VALUE
     merged["first_max_hour"] = _FIRST_MAX_HOUR
+    merged["aqi"] = pd.NA
 
     merged = merged.rename(
         columns={
@@ -172,13 +173,14 @@ def transform_env_daily(raw_daily_files: list[Path], unique_monitors: pd.DataFra
         }
     )
 
+    pm25_mask = merged["group_store"].astype(str).str.casefold().eq("pm25")
+    if pm25_mask.any():
+        result.loc[pm25_mask, "aqi"] = calculate_aqi(result.loc[pm25_mask].copy())["aqi"]
+
     result = merged[_OUTPUT_COLUMNS].copy()
     result = result.drop_duplicates()
 
     print(f"  Transformed {len(result)} Envista sample records")
-
-    # Calculate AQI values
-    final_df = calculate_aqi(transformed_df)
 
     return result
 
