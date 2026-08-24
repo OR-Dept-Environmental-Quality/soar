@@ -21,7 +21,7 @@ sys.path.insert(0, str(ROOT / "src"))
 
 import config
 from envista.transformers.transform_env import transform_env_daily_for_year
-from envista.transformers.transform_env_hourly import transform_env_hourly_for_year
+from envista.transformers.transform_env_hourly import transform_env_sample_for_year
 from loaders.filesystem import write_csv
 
 def _load_envista_pollutant_data() -> pd.DataFrame:
@@ -193,7 +193,7 @@ def run(argv: list[str] | None = None) -> None:
             year_str = str(year)
             print(f"\nProcessing sample year {year_str}...")
 
-            transform_sample_df = transform_env_hourly_for_year(
+            transform_sample_df = transform_env_sample_for_year(
                 year_str,
                 raw_sample_dir,
                 unique_monitors,

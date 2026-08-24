@@ -38,13 +38,13 @@ _OUTPUT_COLUMNS = [
 
 def _infer_group_store_from_filename(file_path: Path) -> str | None:
     """Infer the Envista group_store from a raw sample filename."""
-    match = re.match(r"^env_hourly_(.+)_(\d{4})$", file_path.stem, flags=re.IGNORECASE)
+    match = re.match(r"^env_sample_(.+)_(\d{4})$", file_path.stem, flags=re.IGNORECASE)
     if match:
         return match.group(1)
     return None
 
 
-def transform_env_hourly(
+def transform_env_sample(
     raw_files: List[Path],
     unique_monitors: pd.DataFrame,
     pollutant_catalog: pd.DataFrame,
@@ -59,12 +59,12 @@ def transform_env_hourly(
     No validity_indicator filtering is applied — all records are kept.
 
     Args:
-        raw_files: List of paths to raw Envista hourly CSV files.
+        raw_files: List of paths to raw Envista sample CSV files.
         unique_monitors: DataFrame with at least columns ``station_id``
             and ``stations_tag`` (the AQS-formatted site_code).
 
     Returns:
-        Transformed DataFrame with the hourly schema columns. Empty DataFrame
+        Transformed DataFrame with the sample schema columns. Empty DataFrame
         if no data was found or no files could be read.
     """
     if not raw_files:
@@ -174,7 +174,7 @@ def transform_env_hourly(
     return result
 
 
-def transform_env_hourly_for_year(
+def transform_env_sample_for_year(
     year: str,
     raw_env_sample_dir: Path,
     unique_monitors: pd.DataFrame,
@@ -182,19 +182,19 @@ def transform_env_hourly_for_year(
 ) -> pd.DataFrame:
     """Transform Envista sample PM2.5 data for a specific year.
 
-    Globs all files matching env_hourly_pm25_{year}.csv in raw_env_sample_dir,
-    then delegates to transform_env_hourly.
+    Globs all files matching env_sample_pm25_{year}.csv in raw_env_sample_dir,
+    then delegates to transform_env_sample.
 
     Args:
         year: Four-digit year string (e.g. "2023").
-        raw_env_sample_dir: Directory containing raw Envista hourly CSV files.
+        raw_env_sample_dir: Directory containing raw Envista sample CSV files.
         unique_monitors: DataFrame with ``station_id`` and ``stations_tag`` columns.
         pollutant_catalog: DataFrame containing pollutant information.
 
     Returns:
         Transformed DataFrame for the year.
     """
-    pattern = f"env_hourly_pm25_{year}.csv"
+    pattern = f"env_sample_pm25_{year}.csv"
     raw_files = list(raw_env_sample_dir.glob(pattern))
 
     if not raw_files:
@@ -203,4 +203,4 @@ def transform_env_hourly_for_year(
 
     print(f"  Found {len(raw_files)} Envista sample file(s) for year {year}")
 
-    return transform_env_hourly(raw_files, unique_monitors, pollutant_catalog)
+    return transform_env_sample(raw_files, unique_monitors, pollutant_catalog)
