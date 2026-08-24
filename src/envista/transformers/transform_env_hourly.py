@@ -147,7 +147,7 @@ def transform_env_sample(
     merged["date_local"] = dt.dt.strftime("%Y-%m-%d")
     merged["time_local"] = dt.dt.strftime("%H:%M")
 
-    merged = merged[merged["data_channels_valid"] == "TRUE"]
+    merged = merged[merged["data_channels_valid"] == TRUE]
 
     merged["validity_indicator"] = merged["data_channels_valid"].map(
         {True: "Y", False: "N", "True": "Y", "False": "N", 1: "Y", 0: "N"}
