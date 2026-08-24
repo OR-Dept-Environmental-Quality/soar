@@ -49,21 +49,21 @@ if BDATE < date(2018, 7, 1): BDATE = date(2018, 7, 1)  # Envista data starts mid
 
 
 def _load_envista_group_catalog() -> pd.DataFrame:
-    """Load monitor_name to group_store mappings from Envista dimension tables."""
+    """Load env_monitor_name to group_store mappings from Envista dimension tables."""
     
     df = pd.read_csv("ops/dimPollutant_Envista.csv", dtype=str)
     normalized_cols = {str(col).strip(): col for col in df.columns}
 
-    if "monitor_name" in normalized_cols and "group_store" in normalized_cols:
-        df = df[[normalized_cols["monitor_name"], normalized_cols["group_store"]]].copy()
-        df.columns = ["monitor_name", "group_store"]
-        df = df.dropna(subset=["monitor_name", "group_store"]).drop_duplicates()
-        df["monitor_name"] = df["monitor_name"].astype(str).str.strip()
+    if "env_monitor_name" in normalized_cols and "group_store" in normalized_cols:
+        df = df[[normalized_cols["env_monitor_name"], normalized_cols["group_store"]]].copy()
+        df.columns = ["env_monitor_name", "group_store"]
+        df = df.dropna(subset=["env_monitor_name", "group_store"]).drop_duplicates()
+        df["env_monitor_name"] = df["env_monitor_name"].astype(str).str.strip()
         df["group_store"] = df["group_store"].astype(str).str.strip()
         return df
 
     raise FileNotFoundError(
-        "No Envista pollutant catalog file with monitor_name and group_store columns was found in ops/."
+        "No Envista pollutant catalog file with env_monitor_name and group_store columns was found in ops/."
     )
 
 
@@ -404,7 +404,7 @@ def main(argv: list[str] | None = None) -> None:
     # Load configured monitor names and group_store mappings from the Envista dimension table
     envista_group_catalog = _load_envista_group_catalog()
     envista_group_catalog["monitor_name_norm"] = (
-        envista_group_catalog["monitor_name"].astype(str).str.strip().str.casefold()
+        envista_group_catalog["env_monitor_name"].astype(str).str.strip().str.casefold()
     )
 
     monitor_metadata = monitor_metadata.copy()
