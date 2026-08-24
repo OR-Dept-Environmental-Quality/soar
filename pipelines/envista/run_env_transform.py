@@ -20,7 +20,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
 
 import config
-from envista.transformers.transform_env import transform_env_daily_for_year
+from envista.transformers.transform_env_daily import transform_env_daily_for_year
 from envista.transformers.transform_env_hourly import transform_env_sample_for_year
 from loaders.filesystem import write_csv
 
