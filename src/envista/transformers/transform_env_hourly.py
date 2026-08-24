@@ -106,7 +106,7 @@ def transform_env_sample(
             }
 
     # Drop sentinel missing-value rows
-    combined = combined[combined["data_channels_value"] != -9999].copy()
+    combined = combined[combined["data_channels_valid"] != False].copy()
 
     if combined.empty:
         return pd.DataFrame()
@@ -147,7 +147,7 @@ def transform_env_sample(
     merged["date_local"] = dt.dt.strftime("%Y-%m-%d")
     merged["time_local"] = dt.dt.strftime("%H:%M")
 
-    merged = merged[merged["data_channels_valid"] == TRUE]
+    merged = merged[merged["data_channels_valid"] == True].copy()
 
     merged["validity_indicator"] = merged["data_channels_valid"].map(
         {True: "Y", False: "N", "True": "Y", "False": "N", 1: "Y", 0: "N"}
