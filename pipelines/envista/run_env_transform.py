@@ -145,6 +145,16 @@ def run(argv: list[str] | None = None) -> None:
 
     # Read in pollutant catalog
     pollutant_catalog = _load_envista_pollutant_data()
+    if requested_group_stores is None:
+        requested_group_stores = (
+            pollutant_catalog["group_store"]
+            .dropna()
+            .astype(str)
+            .str.strip()
+            .unique()
+            .tolist()
+        )
+
     if requested_group_stores:
         requested_norm = {value.casefold() for value in requested_group_stores}
         pollutant_catalog = pollutant_catalog[

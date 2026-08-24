@@ -148,7 +148,7 @@ def transform_env_daily(raw_daily_files: list[Path], unique_monitors: pd.DataFra
     merged["date_local"] = dt.dt.strftime("%Y-%m-%d")
     merged["time_local"] = dt.dt.strftime("%H:%M")
 
-    merged = merged[merged["data_channels_valid"] == "TRUE"]
+    merged = merged[merged["data_channels_valid"] == True]
 
     merged["validity_indicator"] = merged["data_channels_valid"].map(
         {True: "Y", False: "N", "True": "Y", "False": "N", 1: "Y", 0: "N"}
@@ -168,21 +168,22 @@ def transform_env_daily(raw_daily_files: list[Path], unique_monitors: pd.DataFra
 
     merged = merged.rename(
         columns={
-            "data_channels_value": "sample_measurement",
+            "data_channels_value": "arithmetic_mean",
             "stations_tag": "site_code",
         }
     )
 
-    pm25_mask = merged["group_store"].astype(str).str.casefold().eq("pm25")
+    result = merged[_OUTPUT_COLUMNS + ["group_store"]].copy()
+    result = result.drop_duplicates()
+
+    result["aqi"] = pd.NA
+    pm25_mask = result["group_store"].astype(str).str.casefold().eq("pm25")
     if pm25_mask.any():
         result.loc[pm25_mask, "aqi"] = calculate_aqi(result.loc[pm25_mask].copy())["aqi"]
 
-    result = merged[_OUTPUT_COLUMNS].copy()
-    result = result.drop_duplicates()
-
     print(f"  Transformed {len(result)} Envista sample records")
 
-    return result
+    return result.drop(columns=["group_store"]).copy()
 
 def transform_env_daily_for_year(
     year: str,
@@ -209,6 +210,16 @@ def transform_env_daily_for_year(
     # Files are named like env_daily_{pollutant}_{year}.csv
     pattern = f"env_daily_*_{year}.csv"
     daily_files = list(raw_daily_dir.glob(pattern))
+
+    if requested_group_stores is None and pollutant_catalog is not None and not pollutant_catalog.empty:
+        requested_group_stores = (
+            pollutant_catalog["group_store"]
+            .dropna()
+            .astype(str)
+            .str.strip()
+            .unique()
+            .tolist()
+        )
 
     if requested_group_stores:
         requested_norm = {value.casefold() for value in requested_group_stores}
