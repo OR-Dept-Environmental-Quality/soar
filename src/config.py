@@ -63,6 +63,10 @@ CTL_DIR = ROOT / "raw" / "aqs" / "_ctl"  # Control files (circuit breaker health
 PARAMS_CSV = Path("ops/parameters.csv")
 REGIONS_SHP = Path("ops/dimRegions.shp")
 
+#Local path to SharePoint-synced air quality advisory logs.
+#Copy of Sharepoint library 
+ADVISORY_SOURCE_DIR = os.getenv("ADVISORY_SOURCE_DIR")
+
 # Sample extraction mode: "by_state" (default) or "by_site"
 # by_state: Fetch all sites at once, memory-efficient streaming
 # by_site: Fetch site-by-site, slower but more granular
