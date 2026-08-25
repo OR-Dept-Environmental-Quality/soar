@@ -196,9 +196,14 @@ def run(argv: list[str] | None = None) -> None:
                     print(f"No daily data for {group_store} year {year_str}, skipping")
                     continue
 
-                aqi_output_path = trans_aqi_dir / f"aqi_envista_daily_{group_store}_{year_str}.csv"
-                write_csv(transform_daily_df, aqi_output_path)
-                print(f"Wrote {len(transform_daily_df)} AQI records to {aqi_output_path}")
+                if(group_store == "pm25"):
+                    aqi_output_path = trans_aqi_dir / f"aqi_envista_daily_{year_str}.csv"
+                    write_csv(transform_daily_df, aqi_output_path)
+                    print(f"Wrote {len(transform_daily_df)} AQI records to {aqi_output_path}")
+                else:
+                    daily_output_path = trans_daily_dir / f"envista_daily_{group_store}_{year_str}.csv"
+                    write_csv(transform_daily_df, daily_output_path)
+                    print(f"Wrote {len(transform_daily_df)} daily records to {daily_output_path}")
 
                 years_processed += 1
                 total_records += len(transform_daily_df)
@@ -210,9 +215,6 @@ def run(argv: list[str] | None = None) -> None:
             return
 
         for group_store in requested_group_stores:
-            if group_store.casefold() != "pm25":
-                print(f"Skipping sample transformation for unsupported group store: {group_store}")
-                continue
 
             group_catalog = pollutant_catalog[
                 pollutant_catalog["group_store"].str.casefold() == group_store.casefold()
@@ -240,7 +242,7 @@ def run(argv: list[str] | None = None) -> None:
                 total_records += len(transform_sample_df)
 
     print("\nEnvista transformation complete!")
-    print(f"Processed {years_processed} year blocks with {total_records} total records")
+    print(f"Processed {years_processed} year-group store blocks with {total_records} total records")
 
 if __name__ == "__main__":
     run()
