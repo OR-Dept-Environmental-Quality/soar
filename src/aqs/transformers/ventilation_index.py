@@ -7,10 +7,11 @@ Wind speed source data is in knots' converted to m/s for standard m^2/s ventilat
 from __future__ import annotations
 
 import pandas as pd
-
 import config
 
 _KNOTS_TO_MPS = 0.514444
+_VENTILATION_BINS = [0, 235, 2350, 4700, float("inf")]
+_VENTILATION_LABELS = ["Very Poor", "Poor", "Marginal", "Good"]
 
 def _load_mixing_height(year: int):
     path = config.ROOT / "staged" / "fct_mixing_height" / f"fct_mixing_height_{year}.csv"
@@ -20,11 +21,7 @@ def _load_wind_speed(year: int) -> pd.DataFrame:
     path = config.ROOT / "staged" / "fct_wind_speed" / f"fct_wind_speed_{year}.csv"
     df = pd.read_csv(path, dtype={"site_code": str})
     return df [["site_code", "date_local", "time_local", "sample_measurement"]].rename(
-        columns={"sample_measurement": "wind_speed_knots"}
-    )
-
-_VENTILATION_BINS = [0, 235, 2350, 4700, float("inf")]
-_VENTILATION_LABELS = ["Very Poor", "Poor", "Marginal", "Good"]
+        columns={"sample_measurement": "wind_speed_knots"})
 
 def _classify_ventilation(vi_m2_s: pd.Series) ->pd.Series:
     return pd.cut(vi_m2_s, bins=_VENTILATION_BINS, labels=_VENTILATION_LABELS, right=False)
@@ -35,9 +32,7 @@ def calculate_ventilation_index(year: int) -> pd.DataFrame:
     wind_speed = _load_wind_speed(year)
 
     merged = mixing_height.merge(
-        wind_speed, on=["site_code", "date_local", "time_local"], how="inner"
-    )
-
+        wind_speed, on=["site_code", "date_local", "time_local"], how="inner")
     merged["wind_speed_ms"] = merged["wind_speed_knots"] * _KNOTS_TO_MPS
     merged["ventilation_index_m2_s"] = merged["wind_speed_ms"] * merged["mixing_height_m"]
     merged["ventilation_category"] = _classify_ventilation(merged["ventilation_index_m2_s"])
