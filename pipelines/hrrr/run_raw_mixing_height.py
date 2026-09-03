@@ -11,7 +11,7 @@ sys.path.insert(0, str(ROOT / "src"))
 import config
 from hrrr.extractors.pull_raw_mixing_height import run_extraction
 
-_START_YEAR = config.START_YEAR
+_START_YEAR = max(2014, config.START_YEAR)
 _END_YEAR = config.END_YEAR
 
 def _prompt_keep_raw()-> bool:

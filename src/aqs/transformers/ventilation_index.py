@@ -10,6 +10,7 @@ import pandas as pd
 import config
 
 _KNOTS_TO_MPS = 0.514444
+_MIN_START_YEAR = 2014
 _VENTILATION_BINS = [0, 235, 2350, 4700, float("inf")]
 _VENTILATION_LABELS = ["Very Poor", "Poor", "Marginal", "Good"]
 
@@ -45,6 +46,7 @@ def calculate_ventilation_index(year: int) -> pd.DataFrame:
 def run_transform(start_year: int, end_year: int) -> None:
     out_dir = config.ROOT / "staged" / "fct_ventilation_index"
     out_dir.mkdir(parents=True, exist_ok=True)
+    start_year = max(_MIN_START_YEAR, start_year)
 
     for year in range(start_year, end_year +1):
         result = calculate_ventilation_index(year)

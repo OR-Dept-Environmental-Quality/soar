@@ -31,6 +31,8 @@ from rasterio.warp import transform as warp_transform
 
 import config
 
+_MIN_START_YEAR = 2014
+
 _HRRR_URL_TEMPLATE = (
     "https://noaa-hrrr-bdp-pds.s3.amazonaws.com/"
     "hrrr.{date_str}/conus/hrrr.t{hour_str}z.wrfsfcf00.grib2"
@@ -180,6 +182,7 @@ def run_years(start_year: int, end_year: int, sites: pd.DataFrame, keep_raw: boo
         current += timedelta(days=1)
 
 def run_extraction(start_year: int, end_year: int, keep_raw: bool = False) -> None:
+    start_year = max(_MIN_START_YEAR, start_year)
     sites = pd.read_csv(
         config.ROOT / "staged" / "dim_sites" / "dim_sites.csv", dtype={"site_code": str}
     )
