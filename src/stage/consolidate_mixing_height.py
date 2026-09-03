@@ -36,5 +36,5 @@ def run_consolidation() -> None:
     out_dir = config.ROOT /"staged" / "fct_mixing_height"
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    for year in range(2020, 2026):
+    for year in range(config.START_YEAR, config.END_YEAR + 1):
         consolidate_year(year, daily_dir, out_dir)

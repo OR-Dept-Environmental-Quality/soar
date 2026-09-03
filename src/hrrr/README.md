@@ -5,7 +5,7 @@ Extracts hourly mixing height (Planetary Boundary Layer Height) from NOAA's High
 This README covers the full pipeline:
 - 'src/hrrr/extractors/pull_raw_mixing_height.py' + 'pipelines/hrrr/run_raw_mixing_height.py'
 - 'src/stage/consolidate_mixing_height.py' + 'pipelines/hrrr/run_fct_mixing_height.py'
-- 'src/aqs/transformers/ventilation_index.py' + 'pipelines/aqs/run_ventilation_index.py'
+- 'src/aqs/transformers/ventilation_index.py' + 'pipelines/aqs/run_fct_ventilation_index.py'
 
 ## Prerequisites
 

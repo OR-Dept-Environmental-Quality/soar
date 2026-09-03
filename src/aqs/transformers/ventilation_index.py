@@ -61,4 +61,4 @@ def run_transform(start_year: int, end_year: int) -> None:
         print(f"{year}: wrote {len(result)} hourly ventilation index rows")
 
 if __name__ == "__main__":
-    run_transform(2020,2025)
+    run_transform(config.START_YEAR, config.END_YEAR)

@@ -8,10 +8,11 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
 
+import config
 from hrrr.extractors.pull_raw_mixing_height import run_extraction
 
-_START_YEAR = 2020
-_END_YEAR= 2025
+_START_YEAR = config.START_YEAR
+_END_YEAR = config.END_YEAR
 
 def _prompt_keep_raw()-> bool:
     num_years = _END_YEAR - _START_YEAR +1

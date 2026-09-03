@@ -1,6 +1,6 @@
 """ HRRR mixing height extraction (PBL height) multi-year raw extraction.
 
-Downloads and processes HRRR mising height data for Oregons monitoring sites across a range of years,
+Downloads and processes HRRR mixing height data for Oregons monitoring sites across a range of years,
 using NOAA's .idx byte-range index to pull only the HPBL:surface field. .idx is a plain-text index NOAA publishes 
 with the HRRR GRIB2 files. This allows us to find the byte at which HPBL:surface is stored and return just that byte
 length, without unecessary information. 
@@ -146,7 +146,9 @@ def run_day(day:datetime, sites: pd.DataFrame, grib_dir: Path, out_dir: Path, ke
     day_bytes =0
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         futures ={
-            executor.submit(extract_hour, day.replace(hour=h), sites, grib_dir): h
+            executor.submit(
+                extract_hour, day.replace(hour=h), sites, grib_dir, keep_raw=keep_raw
+            ): h
             for h in range(24)
         }
         for future in as_completed(futures):
@@ -182,4 +184,4 @@ def run_extraction(start_year: int, end_year: int, keep_raw: bool = False) -> No
         config.ROOT / "staged" / "dim_sites" / "dim_sites.csv", dtype={"site_code": str}
     )
     sites = sites[["site_code", "latitude", "longitude"]].dropna()
-    run_years(start_year , end_year, sites)
+    run_years(start_year, end_year, sites, keep_raw=keep_raw)
