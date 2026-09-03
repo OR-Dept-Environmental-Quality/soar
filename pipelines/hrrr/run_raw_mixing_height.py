@@ -18,7 +18,7 @@ def _prompt_keep_raw()-> bool:
     num_years = _END_YEAR - _START_YEAR +1
     total_gb = 25 * num_years
     response = input(
-        f"Keep raw HRRR GRIB2 files (~25GB/year, ~{total_gb}GB total for {_START_YEAR}-{_END_YEAR})? [y/N]: "
+        f"Keep raw HRRR GRIB2 files (~25GB/year, ~{total_gb}GB total for {_START_YEAR}-{_END_YEAR})? [y/n]: "
     ).strip().lower()
     return response in ("y", "yes")
 
