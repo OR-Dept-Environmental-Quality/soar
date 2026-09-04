@@ -5,13 +5,13 @@ using NOAA's .idx byte-range index to pull only the HPBL:surface field. .idx is 
 with the HRRR GRIB2 files. This allows us to find the byte at which HPBL:surface is stored and return just that byte
 length, without unecessary information. 
 
-Each sites value is a 50km inverse distance weighted average of nerby grid cells, since the output is used the generalize air quality around
+Each site's value is a 50km inverse distance-weighted average of nearby grid cells, since the output is used the generalize air quality around
 a given site. 
 
 Resumable: Skips any day that has already been extracted Downloads within a day concurrently 
 to cut overall run-time. This data extraction is very slow.
 
-Output: raw/hrr_mixing_height/mixing_height_{start}_{end}.csv
+Output: transform/hrr_mixing_height/mixing_height_{date}.csv
 
 #NOAA High-Resolution Rapid Refresh (HRRR) Model was accessed on {DATE} from https://registry.opendata.aws/noaa-hrrr-pds.
 """
@@ -33,10 +33,7 @@ import config
 
 _MIN_START_YEAR = 2014
 
-_HRRR_URL_TEMPLATE = (
-    "https://noaa-hrrr-bdp-pds.s3.amazonaws.com/"
-    "hrrr.{date_str}/conus/hrrr.t{hour_str}z.wrfsfcf00.grib2"
-)
+_HRRR_URL_TEMPLATE = "https://noaa-hrrr-bdp-pds.s3.amazonaws.com/hrrr.{date_str}/conus/hrrr.t{hour_str}z.wrfsfcf00.grib2"
 
 def _download_hrrr_subset(dt: datetime, out_dir: Path, search_pattern: str = "HPBL:surface")-> tuple[Path,int]:
     """Download only the HPBL:surface field from an HRRR file, using NOAA's .idx byte-range index instead of full grid file"""
@@ -72,8 +69,6 @@ def _download_hrrr_subset(dt: datetime, out_dir: Path, search_pattern: str = "HP
     out_path.write_bytes(response.content)
 
     return out_path, len(response.content)
-
-
 
 def _find_hpbl_band(dataset: rasterio.DatasetReader)-> int:
     """ Find the band index for PLanetary Boundary Layer Height (HPBL) by inspecting each band's GRIB metadata tags."""
@@ -114,7 +109,6 @@ def _idw_at_site(dataset, band_idx: int, site_x: float, site_y: float, radius_m:
 
     weights = 1.0 / np.maximum(distances[mask], 1.0)** power
     return float(np.sum(weights*band_window[mask]) / np.sum(weights))
-
 
 def extract_hour(dt: datetime, sites: pd.DataFrame, grib_dir: Path, keep_raw: bool = False, radius_m: float = 50_000, power: float = 2.0) -> tuple[pd.DataFrame, int]:
     """ Extract mixing height for all sites for a single hour."""
