@@ -32,6 +32,8 @@ from rasterio.warp import transform as warp_transform
 import config
 
 _MIN_START_YEAR = 2014
+_RADIUS_M = 50000  # 50km radius for inverse distance weighting
+_POWER = 2  # Inverse distance weighting power
 
 _HRRR_URL_TEMPLATE = "https://noaa-hrrr-bdp-pds.s3.amazonaws.com/hrrr.{date_str}/conus/hrrr.t{hour_str}z.wrfsfcf00.grib2"
 
@@ -80,14 +82,14 @@ def _find_hpbl_band(dataset: rasterio.DatasetReader)-> int:
             return band_idx
     raise ValueError("Could not find HPBL band in GRIB file")
 
-def _idw_at_site(dataset, band_idx: int, site_x: float, site_y: float, radius_m: float = 50_000, power: float = 2.0) -> float:
-    """Inverse-distance-weighted average of every grid cell within radiu_m meters of (site_x, site_y), in the data sets own CRS coordinates."""
+def _idw_at_site(dataset, band_idx: int, site_x: float, site_y: float) -> float:
+    """Inverse-distance-weighted average of every grid cell within radius_m meters of (site_x, site_y), in the data sets own CRS coordinates."""
     row, col = dataset.index(site_x, site_y)
 
     res_x = abs(dataset.transform.a)
     res_y = abs(dataset.transform.e)
-    cell_radius_row = int(radius_m / res_y) +1
-    cell_radius_col = int(radius_m / res_x) +1
+    cell_radius_row = int(_RADIUS_M / res_y) +1
+    cell_radius_col = int(_RADIUS_M / res_x) +1
 
     row_start = max(0, row - cell_radius_row)
     row_stop = min(dataset.height, row + cell_radius_row + 1)
@@ -103,14 +105,14 @@ def _idw_at_site(dataset, band_idx: int, site_x: float, site_y: float, radius_m:
     xs, ys = rasterio.transform.xy(dataset.transform, rows.ravel(), cols.ravel())
     distances = np.sqrt((np.array(xs) - site_x)** 2 + (np.array(ys) - site_y) ** 2)
 
-    mask = distances <= radius_m
+    mask = distances <= _RADIUS_M
     if not mask.any():
         return float(band_window.flat[np.argmin(distances)])
 
-    weights = 1.0 / np.maximum(distances[mask], 1.0)** power
+    weights = 1.0 / np.maximum(distances[mask], 1.0)** _POWER
     return float(np.sum(weights*band_window[mask]) / np.sum(weights))
 
-def extract_hour(dt: datetime, sites: pd.DataFrame, grib_dir: Path, keep_raw: bool = False, radius_m: float = 50_000, power: float = 2.0) -> tuple[pd.DataFrame, int]:
+def extract_hour(dt: datetime, sites: pd.DataFrame, grib_dir: Path, keep_raw: bool = False) -> tuple[pd.DataFrame, int]:
     """ Extract mixing height for all sites for a single hour."""
     grib_path, n_bytes = _download_hrrr_subset(dt, grib_dir)
 
@@ -120,7 +122,7 @@ def extract_hour(dt: datetime, sites: pd.DataFrame, grib_dir: Path, keep_raw: bo
             xs, ys, = warp_transform(
                 "EPSG:4326", dataset.crs, sites["longitude"].tolist(), sites["latitude"].tolist()
             )
-            values = [_idw_at_site(dataset, band_idx, x, y, radius_m=radius_m, power=power) for x, y in zip(xs, ys)]
+            values = [_idw_at_site(dataset, band_idx, x, y) for x, y in zip(xs, ys)]
     finally:
         if not keep_raw:
             grib_path.unlink(missing_ok=True)
