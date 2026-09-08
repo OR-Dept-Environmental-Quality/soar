@@ -48,7 +48,7 @@ RAW_AQS_DAILY = ROOT / "raw" / "aqs" / "daily"  # Daily summaries
 RAW_AQS_ANNUAL = ROOT / "raw" / "aqs" / "annual"  # Annual aggregates
 RAW_AQS_QUALIFIERS = ROOT / "raw" / "aqs" / "qualifiers"  # Qualifier data for toxics
 RAW_ENV_MONITORS = ROOT / "raw" / "envista" / "monitors"  # Envista monitor metadata
-RAW_ENV_SAMPLE = ROOT / "raw" / "envista" / "sample"  # Envista sample data
+RAW_ENV_HOURLY = ROOT / "raw" / "envista" / "hourly"  # Envista hourly data
 RAW_ENV_DAILY = ROOT / "raw" / "envista" / "daily"
 
 TRANS_MONITORS = ROOT / "transform" / "monitors"  # Transformed/curated layer
@@ -101,8 +101,7 @@ ENV_BACKOFF_FACTOR = float(os.getenv("ENV_BACKOFF_FACTOR", "1.5"))
 ENV_RETRY_MAX_WAIT = int(os.getenv("ENV_RETRY_MAX_WAIT", "60"))
 ENV_MIN_DELAY = float(os.getenv("ENV_MIN_DELAY", "0"))
 ENV_MAX_RPS = int(os.getenv("ENV_MAX_RPS", "5"))
-ENV_SAMPLE_YEAR_WORKERS = max(1, int(os.getenv("ENV_SAMPLE_YEAR_WORKERS", "3")))
-ENV_SAMPLE_PARAM_WORKERS = max(1, int(os.getenv("ENV_SAMPLE_PARAM_WORKERS", "3")))
+ENV_WORKERS = max(1, int(os.getenv("ENV_WORKERS", "3")))
 ENV_TEST_MODE = os.getenv("ENV_TEST_MODE")
 
 # Envista circuit breaker settings (explicitly exposed)

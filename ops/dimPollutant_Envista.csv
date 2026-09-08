@@ -1,0 +1,3 @@
+group_store, analyte_group,analyte_name_deq,aqs_parameter,monitor_name
+pm25,PM25,"PM2.5 Est SensOR",88502,"PM2.5 Est SensOR"
+carb_aero,Carb_aero,"Biomass Burning Percent",,"Aeth %BB"
