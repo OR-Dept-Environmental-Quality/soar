@@ -5,15 +5,17 @@ using NOAA's .idx byte-range index to pull only the HPBL:surface field. .idx is 
 with the HRRR GRIB2 files. This allows us to find the byte at which HPBL:surface is stored and return just that byte
 length, without unecessary information. 
 
-Each site's value is a 50km inverse distance-weighted average of nearby grid cells, since the output is used the generalize air quality around
-a given site. 
+Each hours field is cropped to Oregon + 100km buffer to reduce memory usage and written as a single 24-band GeoTIFF (band N = hour N-1),
+skipping days already downloaded. Used fixed PST (UTC-8) offset for consistency with other data in repository. Not DST aware.
 
-Resumable: Skips any day that has already been extracted Downloads within a day concurrently 
-to cut overall run-time. This data extraction is very slow.
+Outout is organized by fixed PST (UTC-8, not DST-aware, to match other data in the repository): one 24-hour GeoTIFF per PST calendar day,
+where N holds hour N-1's data. Raw HRRR archives are UTC indexed, so each PST hour is converted to its corresponding UTC hour for download.
 
-Output: transform/hrr_mixing_height/mixing_height_{date}.csv
+Resumable: skips any days that have already been downloaded. If a day is partially downloaded, it will be overwritten with a new file containing all 24 hours.
 
-#NOAA High-Resolution Rapid Refresh (HRRR) Model was accessed on {DATE} from https://registry.opendata.aws/noaa-hrrr-pds.
+Output: raw/hrrr_grib/mixing_height_{date}.tiff
+
+NOAA HRRR data is available at https://registry.opendata.aws/noaa-hrrr-pds/ and https://noaa-hrrr-bdp-pds.s3.amazonaws.com/hrrr.{date}/conus/hrrr.t{hour}z.wrfsfcf00.grib2
 """
 
 from __future__ import annotations
@@ -28,27 +30,44 @@ import requests
 import rasterio
 import rasterio.windows
 from rasterio.warp import transform as warp_transform
+from rasterio.io import MemoryFile
 
 import config
 
 _MIN_START_YEAR = 2014
-_RADIUS_M = 50000  # 50km radius for inverse distance weighting
-_POWER = 2  # Inverse distance weighting power
+_PST_OFFSET = timedelta(hours=8) #fixed offset for PST. Not DST aware, consistent with other data in repository. 
+_OREGON_BOUNDS_WGS84 = (-124.6, 42.0, -116.6, 46.3) #west, south, east, north
+_CROP_BUFFER_M = 100_000 #crop HRRR grid to Oregon + buffer to reduce memory usage
 
 _HRRR_URL_TEMPLATE = "https://noaa-hrrr-bdp-pds.s3.amazonaws.com/hrrr.{date_str}/conus/hrrr.t{hour_str}z.wrfsfcf00.grib2"
 
-def _download_hrrr_subset(dt: datetime, out_dir: Path, search_pattern: str = "HPBL:surface")-> tuple[Path,int]:
-    """Download only the HPBL:surface field from an HRRR file, using NOAA's .idx byte-range index instead of full grid file"""
+def _crop_window(dataset: rasterio.DatasetReader) -> rasterio.windows.Window:
+    """Return a rasterio window that crops the dataset to Oregon + buffer, in the dataset's own CRS."""
+    west, south, east, north = _OREGON_BOUNDS_WGS84
+    corner_lons = [west, east, west, east]
+    corner_lats = [south, south, north, north]
+    xs, ys = warp_transform("EPSG:4326", dataset.crs, corner_lons, corner_lats)
+
+    min_x, max_x = min(xs) - _CROP_BUFFER_M, max(xs) + _CROP_BUFFER_M
+    min_y, max_y = min(ys) - _CROP_BUFFER_M, max(ys) + _CROP_BUFFER_M
+
+    row_start, col_start = dataset.index(min_x, max_y)
+    row_stop, col_stop = dataset.index(max_x, min_y)
+
+    row_start = max(0, row_start)
+    col_start = max(0, col_start)
+    row_stop = min(dataset.height, row_stop)
+    col_stop = min(dataset.width, col_stop)
+
+    return rasterio.windows.Window.from_slices((row_start, row_stop), (col_start, col_stop))
+
+def _fetch_hour_array(dt: datetime, search_pattern: str = "HPBL:surface"):
+    """Download HPBL:surface field for one hour via byte-range requests, crop it to Oregon + 100km buffer. Returns (cropped_array, 
+    transform, crs, dtype) for the cropped array."""
     date_str = dt.strftime("%Y%m%d")
     hour_str = dt.strftime("%H")
     base_url = _HRRR_URL_TEMPLATE.format(date_str=date_str, hour_str=hour_str)
     idx_url = base_url + ".idx"
-
-    out_dir.mkdir(parents=True, exist_ok=True)
-    out_path = out_dir / f"hrrr_{date_str}_{hour_str}_hpbl.grib2"
-
-    if out_path.exists():
-        return out_path, out_path.stat().st_size
 
     idx_response = requests.get(idx_url, timeout=60)
     idx_response.raise_for_status()
@@ -68,119 +87,81 @@ def _download_hrrr_subset(dt: datetime, out_dir: Path, search_pattern: str = "HP
     range_header = {"Range": f"bytes={start_byte}-{end_byte}" if end_byte else f"bytes={start_byte}-"}
     response = requests.get(base_url, headers=range_header, timeout=300)
     response.raise_for_status()
-    out_path.write_bytes(response.content)
 
-    return out_path, len(response.content)
+    with MemoryFile(response.content) as memfile:
+        with memfile.open() as dataset:
+            window = _crop_window(dataset)
+            cropped = dataset.read(1, window=window)
+            cropped_transform = dataset.window_transform(window)
+            crs = dataset.crs
+            dtype = dataset.dtypes[0]
 
-def _find_hpbl_band(dataset: rasterio.DatasetReader)-> int:
-    """ Find the band index for PLanetary Boundary Layer Height (HPBL) by inspecting each band's GRIB metadata tags."""
-    for band_idx in range(1, dataset.count + 1):
-        tags = dataset.tags(band_idx)
-        short_name = tags.get("GRIB_SHORT_NAME", "")
-        element = tags.get("GRIB_ELEMENT", "")
-        if "HPBL" in element or "HPBL" in short_name:
-            return band_idx
-    raise ValueError("Could not find HPBL band in GRIB file")
+    return cropped, cropped_transform, crs, dtype
 
-def _idw_at_site(dataset, band_idx: int, site_x: float, site_y: float) -> float:
-    """Inverse-distance-weighted average of every grid cell within radius_m meters of (site_x, site_y), in the data sets own CRS coordinates."""
-    row, col = dataset.index(site_x, site_y)
-
-    res_x = abs(dataset.transform.a)
-    res_y = abs(dataset.transform.e)
-    cell_radius_row = int(_RADIUS_M / res_y) +1
-    cell_radius_col = int(_RADIUS_M / res_x) +1
-
-    row_start = max(0, row - cell_radius_row)
-    row_stop = min(dataset.height, row + cell_radius_row + 1)
-    col_start = max(0 ,col - cell_radius_col)
-    col_stop = min(dataset.height, col + cell_radius_col + 1)
-
-    window   = rasterio.windows.Window.from_slices((row_start, row_stop), (col_start, col_stop))
-    band_window = dataset.read(band_idx, window=window).ravel()
-
-    rows, cols = np.meshgrid(
-        np.arange(row_start, row_stop), np.arange(col_start, col_stop), indexing = "ij"
-    )
-    xs, ys = rasterio.transform.xy(dataset.transform, rows.ravel(), cols.ravel())
-    distances = np.sqrt((np.array(xs) - site_x)** 2 + (np.array(ys) - site_y) ** 2)
-
-    mask = distances <= _RADIUS_M
-    if not mask.any():
-        return float(band_window.flat[np.argmin(distances)])
-
-    weights = 1.0 / np.maximum(distances[mask], 1.0)** _POWER
-    return float(np.sum(weights*band_window[mask]) / np.sum(weights))
-
-def extract_hour(dt: datetime, sites: pd.DataFrame, grib_dir: Path, keep_raw: bool = False) -> tuple[pd.DataFrame, int]:
-    """ Extract mixing height for all sites for a single hour."""
-    grib_path, n_bytes = _download_hrrr_subset(dt, grib_dir)
-
-    try:
-        with rasterio.open(grib_path) as dataset:
-            band_idx = _find_hpbl_band(dataset)
-            xs, ys, = warp_transform(
-                "EPSG:4326", dataset.crs, sites["longitude"].tolist(), sites["latitude"].tolist()
-            )
-            values = [_idw_at_site(dataset, band_idx, x, y) for x, y in zip(xs, ys)]
-    finally:
-        if not keep_raw:
-            grib_path.unlink(missing_ok=True)
-
-    result = sites[["site_code"]].copy()
-    result["mixing_height_m"] = values
-    result["date_local"] = dt.strftime("%Y-%m-%d")
-    result["time_local"] = dt.strftime("%H:00")
-    return result, n_bytes
-
-def run_day(day:datetime, sites: pd.DataFrame, grib_dir: Path, out_dir: Path, keep_raw: bool = False, max_workers: int = 8) -> None:
-    """Extract all 24 hours for one day concurrently and write one CSV, skipping days that are already extracted."""
+def run_day(day:datetime, grib_dir: Path, max_workers: int = 8) -> None:
+    """Download all 24 hours of HRRR mixing height data for one day and write them as a single 24-band GeoTIFF (band N = hour N-1),
+    skipping days already downloaded. Used fixed PST (UTC-8) offset for consistency with other data in repository. Not DST aware."""
     day_str = day.strftime("%Y-%m-%d")
-    out_path = out_dir / f"mixing_height_{day_str}.csv"
+    out_path = grib_dir / f"mixing_height_{day_str}.tiff"
     if out_path.exists():
         return
 
-    day_rows = []
-    day_bytes =0
+    grib_dir.mkdir(parents=True, exist_ok=True)
+    hour_arrays: dict[int, np.ndarray] = {}
+    ref_transform = ref_crs = ref_dtype = None
+    
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
-        futures ={
-            executor.submit(
-                extract_hour, day.replace(hour=h), sites, grib_dir, keep_raw=keep_raw
-            ): h
-            for h in range(24)
-        }
+        futures ={}
+        for h in range(24):
+            local_dt = datetime(day.year, day.month, day.day, h) #PST local time to be filled
+            utc_dt = local_dt + _PST_OFFSET                      #Actual UTC time to be used for HRRR download
+            futures[executor.submit(_fetch_hour_array, utc_dt)] = h #Convert to PST for naming, but use UTC for HRRR download
+    
         for future in as_completed(futures):
             hour = futures[future]
             try:
-                result, n_bytes = future.result()
-                day_rows.append(result)
-                day_bytes += n_bytes
-            except Exception as e :
-                print (f" {day_str} hour {hour:02d}: FAILED ({e})")
+                cropped, transform, crs, dtype = future.result()
+                hour_arrays[hour] = cropped
+                ref_transform, ref_crs, ref_dtype = transform, crs, dtype
+            except Exception as e:
+                print(f"{day_str} hour {hour:02d}: error downloading HRRR subset: {e}")
 
-    if day_rows:
-        day_df = pd.concat(day_rows, ignore_index=True).sort_values("time_local")
-        day_df.to_csv(out_path, index=False)
-        print(f" {day_str}: wrote {len(day_df)} rows, {day_bytes:,} bytes")
-    else:
+    if not hour_arrays:
         print(f"{day_str}: all hours failed, no file written")
+        return
 
-def run_years(start_year: int, end_year: int, sites: pd.DataFrame, keep_raw: bool = False)-> None:
-    """Run every day from start_year through end_year (inclusive)."""
+    height, width = next(iter(hour_arrays.values())).shape
+    nodata = -9999.0
+    profile = {
+        "driver": "GTiff",
+        "count": 24,
+        "dtype": ref_dtype,
+        "width": width,
+        "height": height,
+        "crs": ref_crs,
+        "transform": ref_transform,
+        "nodata": nodata,
+        "compress": "lzw",
+    }
+
+    with rasterio.open(out_path, "w", **profile) as dst:
+        for hour in range(24):
+            band_data = hour_arrays.get(hour, np.full((height, width), nodata, dtype=ref_dtype))
+            dst.write(band_data, hour + 1)
+            dst.set_band_description(hour + 1, f"hour_{hour:02d}_pst")
+
+    missing = 24 - len(hour_arrays)
+    print(f"{day_str}: wrote {out_path} with {missing} missing hours filled with nodata")
+
+def run_years(start_year: int, end_year: int)-> None:
+    """Dowload all HRRR mixing height data for a range of years, skipping any days that have already been downloaded."""
     grib_dir = config.ROOT / "raw" / "hrrr_grib"
-    out_dir = config.ROOT / "transform" / "hrrr_mixing_height"
-    out_dir.mkdir(parents=True, exist_ok=True)
-
     current = datetime(start_year, 1,1)
     end = datetime(end_year,12,31)
     while current <= end:
-        run_day(current, sites, grib_dir, out_dir, keep_raw=keep_raw)
+        run_day(current, grib_dir)
         current += timedelta(days=1)
 
-def run_extraction(start_year: int, end_year: int, keep_raw: bool = False) -> None:
+def run_extraction(start_year: int, end_year: int) -> None:
     start_year = max(_MIN_START_YEAR, start_year)
-    sites = pd.read_csv(
-        config.ROOT / "staged" / "dim_sites" / "dim_sites.csv", dtype={"site_code": str}
-    )
-    sites = sites[["site_code", "latitude", "longitude"]].dropna()
-    run_years(start_year, end_year, sites, keep_raw=keep_raw)
+    run_years(start_year, end_year)
