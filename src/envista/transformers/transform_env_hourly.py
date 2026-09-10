@@ -179,6 +179,7 @@ def transform_env_sample_for_year(
     raw_env_sample_dir: Path,
     unique_monitors: pd.DataFrame,
     pollutant_catalog: pd.DataFrame,
+    requested_group_stores: list[str] | None = None,
 ) -> pd.DataFrame:
     """Transform Envista sample PM2.5 data for a specific year.
 
@@ -194,13 +195,33 @@ def transform_env_sample_for_year(
     Returns:
         Transformed DataFrame for the year.
     """
-    pattern = f"env_sample_pm25_{year}.csv"
+    pattern = f"env_sample_*_{year}.csv"
     raw_files = list(raw_env_sample_dir.glob(pattern))
 
-    if not raw_files:
+    if requested_group_stores is None and pollutant_catalog is not None and not pollutant_catalog.empty:
+        requested_group_stores = (
+            pollutant_catalog["group_store"]
+            .dropna()
+            .astype(str)
+            .str.strip()
+            .unique()
+            .tolist()
+        )
+
+    if requested_group_stores:
+        requested_norm = {value.casefold() for value in requested_group_stores}
+        sample_files = [
+            file_path for file_path in raw_files
+            if any(
+                group_name.casefold() in file_path.name.casefold()
+                for group_name in requested_norm
+            )
+        ]
+
+    if not sample_files:
         print(f"  No Envista sample files found for year {year} in {raw_env_sample_dir}")
         return pd.DataFrame()
 
-    print(f"  Found {len(raw_files)} Envista sample file(s) for year {year}")
+    print(f"  Found {len(sample_files)} Envista sample file(s) for year {year}")
 
-    return transform_env_sample(raw_files, unique_monitors, pollutant_catalog)
+    return transform_env_sample(sample_files, unique_monitors, pollutant_catalog)

@@ -228,6 +228,7 @@ def run(argv: list[str] | None = None) -> None:
                     raw_sample_dir,
                     unique_monitors,
                     group_catalog,
+                    [group_store],
                 )
 
                 if transform_sample_df.empty:
