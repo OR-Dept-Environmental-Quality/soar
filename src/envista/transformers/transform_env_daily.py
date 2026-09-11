@@ -1,77 +1,78 @@
-"""Transformers for Envista sample data.
+"""Transformers for Envista dataframes.
 
-This module provides functions to transform raw Envista sample PM2.5 data
-into cleaned sample records with a schema matching the AQS sample fact table.
+This module provides functions to transform Envista raw data
+into cleaned records with a dataframe schema matching AQS.
 """
 
 from __future__ import annotations
-
-import re
 from pathlib import Path
-from typing import List
+import re
 
+from .calculate_aqi import calculate_aqi
 import pandas as pd
 
 # Default fixed field values that align Envista data with AQS parameter conventions
 _POC = 999
-_SAMPLE_DURATION_CODE = "1"
-_SAMPLE_DURATION = "1 HOUR"
+_SAMPLE_DURATION_CODE = "X"
+_SAMPLE_DURATION = "24-HR BLK AVG"
+_EVENT_TYPE = pd.NA
+_OBSERVATION_COUNT = pd.NA
+_OBSERVATION_PERCENT = pd.NA
+_FIRST_MAX_VALUE = pd.NA
+_FIRST_MAX_HOUR = pd.NA
 _SOURCE = "Envista"
 
 _OUTPUT_COLUMNS = [
     "site_code",
-    "date_local",
-    "time_local",
     "parameter_code",
     "poc",
     "parameter",
-    "sample_measurement",
-    "units_of_measure",
     "sample_duration_code",
     "sample_duration",
+    "date_local",
+    "units_of_measure",
+    "event_type",
+    "observation_count",
+    "observation_percent",
     "validity_indicator",
+    "arithmetic_mean",
+    "first_max_value",
+    "first_max_hour",
+    "aqi",
     "method_code",
     "method",
-    "qualifier",
-    "source",
+    "source"
 ]
 
 def _infer_group_store_from_filename(file_path: Path) -> str | None:
     """Infer the Envista group_store from a raw sample filename."""
-    match = re.match(r"^env_sample_(.+)_(\d{4})$", file_path.stem, flags=re.IGNORECASE)
+    match = re.match(r"^env_daily_(.+)_(\d{4})$", file_path.stem, flags=re.IGNORECASE)
     if match:
         return match.group(1)
     return None
 
+def transform_env_daily(raw_daily_files: list[Path], unique_monitors: pd.DataFrame, pollutant_catalog: pd.DataFrame) -> pd.DataFrame:
+    """Transform raw Envista daily data for a given year.
 
-def transform_env_sample(
-    raw_files: List[Path],
-    unique_monitors: pd.DataFrame,
-    pollutant_catalog: pd.DataFrame,
-) -> pd.DataFrame:
-    """Transform raw Envista sample PM2.5 files into sample records.
-
-    Reads one or more raw Envista sample CSV files, filters out sentinel
-    -9999 values, joins to monitor metadata to obtain site_code, splits
-    the datetime into date_local and time_local, maps the validity flag,
-    and populates fixed AQS-convention fields.
-
-    No validity_indicator filtering is applied — all records are kept.
+    This function reads the raw daily data from the specified input path,
+    merges it with unique monitor information, applies necessary transformations,
+    and returns a cleaned DataFrame.
 
     Args:
-        raw_files: List of paths to raw Envista sample CSV files.
-        unique_monitors: DataFrame with at least columns ``station_id``
-            and ``stations_tag`` (the AQS-formatted site_code).
+        input_path (Path): Path to the raw daily data CSV file.
+        unique_monitors (pd.DataFrame): DataFrame containing unique monitor information.
+        pollutant_catalog (pd.DataFrame): DataFrame containing pollutant information.
 
     Returns:
-        Transformed DataFrame with the sample schema columns. Empty DataFrame
-        if no data was found or no files could be read.
+        pd.DataFrame: Transformed and cleaned DataFrame.
     """
-    if not raw_files:
+
+    if not raw_daily_files:
         return pd.DataFrame()
 
+    # Read and concatenate all files
     frames = []
-    for file_path in raw_files:
+    for file_path in raw_daily_files:
         try:
             df = pd.read_csv(file_path)
             if not df.empty:
@@ -147,7 +148,7 @@ def transform_env_sample(
     merged["date_local"] = dt.dt.strftime("%Y-%m-%d")
     merged["time_local"] = dt.dt.strftime("%H:%M")
 
-    merged = merged[merged["data_channels_valid"] == True].copy()
+    merged = merged[merged["data_channels_valid"] == True]
 
     merged["validity_indicator"] = merged["data_channels_valid"].map(
         {True: "Y", False: "N", "True": "Y", "False": "N", 1: "Y", 0: "N"}
@@ -158,45 +159,57 @@ def transform_env_sample(
     merged["sample_duration"] = _SAMPLE_DURATION
     merged["qualifier"] = pd.NA
     merged["source"] = _SOURCE
+    merged["event_type"] = _EVENT_TYPE
+    merged["observation_count"] = _OBSERVATION_COUNT
+    merged["observation_percent"] = _OBSERVATION_PERCENT
+    merged["first_max_value"] = _FIRST_MAX_VALUE
+    merged["first_max_hour"] = _FIRST_MAX_HOUR
+    merged["aqi"] = pd.NA
 
     merged = merged.rename(
         columns={
-            "data_channels_value": "sample_measurement",
+            "data_channels_value": "arithmetic_mean",
             "stations_tag": "site_code",
         }
     )
 
-    result = merged[_OUTPUT_COLUMNS].copy()
+    result = merged[_OUTPUT_COLUMNS + ["group_store"]].copy()
     result = result.drop_duplicates()
+
+    result["aqi"] = pd.NA
+    pm25_mask = result["group_store"].astype(str).str.casefold().eq("pm25")
+    if pm25_mask.any():
+        result.loc[pm25_mask, "aqi"] = calculate_aqi(result.loc[pm25_mask].copy())["aqi"]
 
     print(f"  Transformed {len(result)} Envista sample records")
 
-    return result
+    return result.drop(columns=["group_store"]).copy()
 
-
-def transform_env_sample_for_year(
+def transform_env_daily_for_year(
     year: str,
-    raw_env_sample_dir: Path,
+    raw_daily_dir: Path,
     unique_monitors: pd.DataFrame,
-    pollutant_catalog: pd.DataFrame,
+    pollutant_catalog: pd.DataFrame | None = None,
     requested_group_stores: list[str] | None = None,
 ) -> pd.DataFrame:
-    """Transform Envista sample PM2.5 data for a specific year.
+    """Transform Envista daily data for a specific year.
 
-    Globs all files matching env_sample_pm25_{year}.csv in raw_env_sample_dir,
-    then delegates to transform_env_sample.
+    Finds all daily files for the given year, combines them, and applies transformations.
 
     Args:
-        year: Four-digit year string (e.g. "2023").
-        raw_env_sample_dir: Directory containing raw Envista sample CSV files.
-        unique_monitors: DataFrame with ``station_id`` and ``stations_tag`` columns.
-        pollutant_catalog: DataFrame containing pollutant information.
+        year: Year string (e.g., "2023")
+        raw_daily_dir: Directory containing raw daily files
+        unique_monitors: Monitor metadata keyed by station_id
+        pollutant_catalog: Optional pollutant catalog used to filter by group_store
+        requested_group_stores: Optional subset of group_store names to include
 
     Returns:
-        Transformed DataFrame for the year.
+        Transformed DataFrame for the year
     """
-    pattern = f"env_sample_*_{year}.csv"
-    raw_files = list(raw_env_sample_dir.glob(pattern))
+    # Find all daily files for this year
+    # Files are named like env_daily_{pollutant}_{year}.csv
+    pattern = f"env_daily_*_{year}.csv"
+    daily_files = list(raw_daily_dir.glob(pattern))
 
     if requested_group_stores is None and pollutant_catalog is not None and not pollutant_catalog.empty:
         requested_group_stores = (
@@ -210,18 +223,20 @@ def transform_env_sample_for_year(
 
     if requested_group_stores:
         requested_norm = {value.casefold() for value in requested_group_stores}
-        sample_files = [
-            file_path for file_path in raw_files
+        daily_files = [
+            file_path for file_path in daily_files
             if any(
                 group_name.casefold() in file_path.name.casefold()
                 for group_name in requested_norm
             )
         ]
 
-    if not sample_files:
-        print(f"  No Envista sample files found for year {year} in {raw_env_sample_dir}")
+    if not daily_files:
+        print(f"No daily files found for year {year}")
         return pd.DataFrame()
 
-    print(f"  Found {len(sample_files)} Envista sample file(s) for year {year}")
+    print(f"Found {len(daily_files)} daily files for year {year}")
+    for file_path in daily_files:
+        print(f"{file_path.name}")
 
-    return transform_env_sample(sample_files, unique_monitors, pollutant_catalog)
+    return transform_env_daily(daily_files, unique_monitors, pollutant_catalog)

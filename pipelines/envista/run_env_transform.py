@@ -7,7 +7,10 @@ transform layer organized by year.
 
 from __future__ import annotations
 
+import argparse
+import os
 import sys
+
 from datetime import date
 from pathlib import Path
 import pandas as pd
@@ -17,20 +20,116 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
 
 import config
-from envista.transformers.transform_env import transform_env_daily_for_year
+from envista.transformers.transform_env_daily import transform_env_daily_for_year
+from envista.transformers.transform_env_hourly import transform_env_sample_for_year
 from loaders.filesystem import write_csv
 
+def _load_envista_pollutant_data() -> pd.DataFrame:
+    """Load dimPollutant data."""
 
-def run():
+    df = pd.read_csv("ops/dimPollutant_Envista.csv", dtype=str)
+    normalized_cols = {str(col).strip(): col for col in df.columns}
+    required_columns = [
+        "group_store",
+        "aqs_parameter_code",
+        "aqs_parameter",
+        "aqs_method_code",
+        "aqs_method",
+        "aqs_units",
+    ]
+    missing_columns = [column for column in required_columns if column not in normalized_cols]
+
+    if not missing_columns:
+        df = df[[normalized_cols[column] for column in required_columns]].copy()
+        df.columns = required_columns
+        df = df.dropna(subset=required_columns).drop_duplicates()
+        for column in required_columns:
+            df[column] = df[column].astype(str).str.strip()
+        return df
+
+    raise ValueError(
+        "Envista pollutant catalog is missing required columns: "
+        f"{', '.join(missing_columns)}"
+    )
+
+def _parse_requested_filters(argv: list[str] | None = None) -> tuple[list[str] | None, list[str]]:
+    """Return selected group_store values and services from CLI args or env."""
+    parser = argparse.ArgumentParser(add_help=False)
+    parser.add_argument(
+        "--group-store",
+        "--group-stores",
+        nargs="+",
+        default=None,
+        help="One or more group_store values to retrieve; e.g. --group-store pm25 carbonaceous_aerosol",
+    )
+    parser.add_argument(
+        "--service",
+        choices=["sample", "daily"],
+        nargs="+",
+        default=None,
+        help="One or more Envista services to run: sample or daily",
+    )
+    args, _ = parser.parse_known_args(argv)
+
+    raw_group_values: list[str] = []
+    if args.group_store:
+        raw_group_values.extend(args.group_store)
+
+    env_group_value = os.getenv("ENV_GROUP_STORE", "").strip()
+    if env_group_value:
+        raw_group_values.extend(part.strip() for part in env_group_value.split(","))
+
+    if raw_group_values:
+        normalized_group_values = []
+        seen: set[str] = set()
+        for value in raw_group_values:
+            for part in str(value).split(","):
+                cleaned = part.strip()
+                if not cleaned:
+                    continue
+                key = cleaned.casefold()
+                if key not in seen:
+                    normalized_group_values.append(cleaned)
+                    seen.add(key)
+        requested_group_stores = normalized_group_values
+    else:
+        requested_group_stores = None
+
+    if args.service:
+        raw_service_values = args.service
+    else:
+        raw_service_values = os.getenv("ENV_SERVICE", "").split(",")
+
+    requested_services = []
+    for value in raw_service_values:
+        service = value.strip().casefold()
+        if service in {"sample", "daily"} and service not in requested_services:
+            requested_services.append(service)
+
+    if not requested_services:
+        requested_services = ["sample", "daily"]
+
+    return requested_group_stores, requested_services
+
+def run(argv: list[str] | None = None) -> None:
     """Run the Envista transformation pipeline."""
+    requested_group_stores, requested_services = _parse_requested_filters(argv)
+
     print("Starting Envista Transformation Pipeline")
     print(f"Date: {date.today()}")
+    if requested_group_stores:
+        print(f"Requested group stores: {requested_group_stores}")
+    else:
+        print("Requested group stores: all configured Envista groups")
+    print(f"Requested services: {requested_services}")
 
     config.ensure_dirs()
 
     raw_monitors_dir = config.RAW_ENV_MONITORS
     raw_daily_dir = config.RAW_ENV_DAILY
+    raw_sample_dir = config.RAW_ENV_SAMPLE
     trans_daily_dir = config.TRANS_DAILY
+    trans_sample_dir = config.TRANS_SAMPLE
     trans_aqi_dir = config.TRANS_AQI
 
     if not raw_monitors_dir.exists():
@@ -38,43 +137,113 @@ def run():
         print("Please run the monitors extraction pipeline first.")
         return
 
-    if not raw_daily_dir.exists():
-        print(f"Raw daily directory not found: {raw_daily_dir}")
-        print("Please run the daily extraction pipeline first.")
-        return
-
     # Output directories
     if not trans_daily_dir.exists():
         trans_daily_dir.mkdir(parents=True, exist_ok=True)
+
+    if not trans_sample_dir.exists():
+        trans_sample_dir.mkdir(parents=True, exist_ok=True)
 
     # Create unique monitor and channel table
     print("Creating unique monitor and channel tables")
     monitors = pd.read_csv(raw_monitors_dir / "envista_stations_monitors.csv")
     unique_monitors = monitors[["station_id", "stations_tag"]].drop_duplicates()
 
+    # Read in pollutant catalog
+    pollutant_catalog = _load_envista_pollutant_data()
+    if requested_group_stores is None:
+        requested_group_stores = (
+            pollutant_catalog["group_store"]
+            .dropna()
+            .astype(str)
+            .str.strip()
+            .unique()
+            .tolist()
+        )
+
+    if requested_group_stores:
+        requested_norm = {value.casefold() for value in requested_group_stores}
+        pollutant_catalog = pollutant_catalog[
+            pollutant_catalog["group_store"].astype(str).str.casefold().isin(requested_norm)
+        ].copy()
+
     years_processed = 0
     total_records = 0
 
-    for year in range(config.START_YEAR, config.END_YEAR + 1):
-        year_str = str(year)
-        print(f"\nProcessing year {year_str}...")
-       
-        transform_daily_df = transform_env_daily_for_year(year_str, raw_daily_dir, unique_monitors)
+    if "daily" in requested_services:
+        if not raw_daily_dir.exists():
+            print(f"Raw daily directory not found: {raw_daily_dir}")
+            print("Please run the daily extraction pipeline first.")
+            return
 
-        if transform_daily_df.empty:
-            print(f"No data for year {year_str}, skipping")
-            continue
+        for group_store in requested_group_stores:
+            group_catalog = pollutant_catalog[
+                pollutant_catalog["group_store"].str.casefold() == group_store.casefold()
+            ].copy()
+            for year in range(config.START_YEAR, config.END_YEAR + 1):
+                year_str = str(year)
+                print(f"\nProcessing daily {group_store} year {year_str}...")
 
-        # Write to AQI transform layer
-        aqi_output_path = trans_aqi_dir / f"aqi_envista_daily_{year_str}.csv"
-        write_csv(transform_daily_df, aqi_output_path)
-        print(f"Wrote {len(transform_daily_df)} AQI records to {aqi_output_path}")
+                transform_daily_df = transform_env_daily_for_year(
+                    year_str,
+                    raw_daily_dir,
+                    unique_monitors,
+                    group_catalog,
+                    [group_store],
+                )
 
-        years_processed += 1
-        total_records += len(transform_daily_df)
+                if transform_daily_df.empty:
+                    print(f"No daily data for {group_store} year {year_str}, skipping")
+                    continue
 
-    print("\nAQI daily transformation complete!")
-    print(f"Processed {years_processed} years with {total_records} total records")
+                if(group_store == "pm25"):
+                    aqi_output_path = trans_aqi_dir / f"aqi_envista_daily_{year_str}.csv"
+                    write_csv(transform_daily_df, aqi_output_path)
+                    print(f"Wrote {len(transform_daily_df)} AQI records to {aqi_output_path}")
+                else:
+                    daily_output_path = trans_daily_dir / f"envista_daily_{group_store}_{year_str}.csv"
+                    write_csv(transform_daily_df, daily_output_path)
+                    print(f"Wrote {len(transform_daily_df)} daily records to {daily_output_path}")
+
+                years_processed += 1
+                total_records += len(transform_daily_df)
+
+    if "sample" in requested_services:
+        if not raw_sample_dir.exists():
+            print(f"Raw sample directory not found: {raw_sample_dir}")
+            print("Please run the sample extraction pipeline first.")
+            return
+
+        for group_store in requested_group_stores:
+
+            group_catalog = pollutant_catalog[
+                pollutant_catalog["group_store"].str.casefold() == group_store.casefold()
+            ].copy()
+            for year in range(config.START_YEAR, config.END_YEAR + 1):
+                year_str = str(year)
+                print(f"\nProcessing sample {group_store} year {year_str}...")
+
+                transform_sample_df = transform_env_sample_for_year(
+                    year_str,
+                    raw_sample_dir,
+                    unique_monitors,
+                    group_catalog,
+                    [group_store],
+                )
+
+                if transform_sample_df.empty:
+                    print(f"No sample data for {group_store} year {year_str}, skipping")
+                    continue
+
+                sample_output_path = trans_sample_dir / f"env_sample_{group_store}_{year_str}.csv"
+                write_csv(transform_sample_df, sample_output_path)
+                print(f"Wrote {len(transform_sample_df)} sample records to {sample_output_path}")
+
+                years_processed += 1
+                total_records += len(transform_sample_df)
+
+    print("\nEnvista transformation complete!")
+    print(f"Processed {years_processed} year-group store blocks with {total_records} total records")
 
 if __name__ == "__main__":
     run()

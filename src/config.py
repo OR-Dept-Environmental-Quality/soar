@@ -48,7 +48,7 @@ RAW_AQS_DAILY = ROOT / "raw" / "aqs" / "daily"  # Daily summaries
 RAW_AQS_ANNUAL = ROOT / "raw" / "aqs" / "annual"  # Annual aggregates
 RAW_AQS_QUALIFIERS = ROOT / "raw" / "aqs" / "qualifiers"  # Qualifier data for toxics
 RAW_ENV_MONITORS = ROOT / "raw" / "envista" / "monitors"  # Envista monitor metadata
-RAW_ENV_HOURLY = ROOT / "raw" / "envista" / "hourly"  # Envista hourly data
+RAW_ENV_SAMPLE = ROOT / "raw" / "envista" / "sample"  # Envista sample data
 RAW_ENV_DAILY = ROOT / "raw" / "envista" / "daily"
 
 TRANS_MONITORS = ROOT / "transform" / "monitors"  # Transformed/curated layer

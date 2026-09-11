@@ -25,7 +25,7 @@ sys.path.insert(0, str(ROOT / "src"))
 
 import config
 from aqs.transformers.sample_hourly import transform_aqs_sample_hourly_for_year
-from envista.transformers.transform_env_hourly import transform_env_hourly_for_year
+from envista.transformers.transform_env_hourly import transform_env_sample_for_year
 
 # PM2.5 parameter codes to pull from AQS sample files
 _PM25_PARAM_CODES = ["88101", "88502"]
@@ -100,7 +100,7 @@ def consolidate_pm25_hourly_for_year(
     )
 
     print(f"  [PM2.5 hourly] Transforming Envista hourly data for {year}...")
-    env_df = transform_env_hourly_for_year(year, raw_env_sample_dir, unique_monitors)
+    env_df = transform_env_sample_for_year(year, raw_env_sample_dir, unique_monitors)
 
     frames = [df for df in (aqs_df, env_df) if not df.empty]
 
