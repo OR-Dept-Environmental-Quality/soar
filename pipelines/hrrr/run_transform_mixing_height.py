@@ -15,4 +15,4 @@ _START_YEAR = config.START_YEAR
 _END_YEAR = config.END_YEAR
 
 if __name__ == "__main__":
-    transform_years(_START_YEAR, _END_YEAR, sites=None, grib_dir=None, out_dir=None)
+    transform_years(_START_YEAR, _END_YEAR)
