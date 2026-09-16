@@ -53,6 +53,7 @@ def run_transform(start_year: int, end_year: int) -> None:
         if result.empty:
             print(f"{year}: no matching mixing height/win speed rows, skipping")
             continue
+        result = result.dropna(subset = ["ventilation_category"]).copy()
         out_path = out_dir / f"fct_ventilation_index_{year}.csv"
         result.to_csv(out_path, index=False)
         print(f"{year}: wrote {len(result)} hourly ventilation index rows")
