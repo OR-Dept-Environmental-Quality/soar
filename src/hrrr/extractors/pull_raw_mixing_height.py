@@ -98,15 +98,16 @@ def _fetch_hour_array(dt: datetime, search_pattern: str = "HPBL:surface"):
 
     return cropped, cropped_transform, crs, dtype
 
-def run_day(day:datetime, grib_dir: Path, max_workers: int = 8) -> None:
+def run_day(day:datetime, raw_dir: Path, max_workers: int = 8) -> None:
     """Download all 24 hours of HRRR mixing height data for one day and write them as a single 24-band GeoTIFF (band N = hour N-1),
     skipping days already downloaded. Used fixed PST (UTC-8) offset for consistency with other data in repository. Not DST aware."""
     day_str = day.strftime("%Y-%m-%d")
-    out_path = grib_dir / f"mixing_height_{day_str}.tiff"
+    out_path = raw_dir / f"mixing_height_{day_str}.tiff"
     if out_path.exists():
+        print(f"{day_str}: already exists, skipping")
         return
 
-    grib_dir.mkdir(parents=True, exist_ok=True)
+    raw_dir.mkdir(parents=True, exist_ok=True)
     hour_arrays: dict[int, np.ndarray] = {}
     ref_transform = ref_crs = ref_dtype = None
     
@@ -155,11 +156,11 @@ def run_day(day:datetime, grib_dir: Path, max_workers: int = 8) -> None:
 
 def run_years(start_year: int, end_year: int)-> None:
     """Dowload all HRRR mixing height data for a range of years, skipping any days that have already been downloaded."""
-    grib_dir = config.ROOT / "raw" / "hrrr_grib"
+    raw_dir = config.ROOT / "raw" / "hrrr_mixing_height"
     current = datetime(start_year, 1,1)
     end = datetime(end_year,12,31)
     while current <= end:
-        run_day(current, grib_dir)
+        run_day(current, raw_dir)
         current += timedelta(days=1)
 
 def run_extraction(start_year: int, end_year: int) -> None:
