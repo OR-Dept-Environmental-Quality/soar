@@ -26,6 +26,9 @@ from rasterio.warp import transform as warp_transform
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
 
+_RADIUS_M = 50_000
+_POWER = 2.0
+
 import config
 
 def _idw_at_site(dataset, band_idx: int, site_x: float, site_y: float, radius_m: float = 50_000, power: float = 2.0) -> float:
@@ -92,7 +95,7 @@ def transform_day(day: datetime, sites: pd.DataFrame, raw_dir: Path, out_dir: Pa
     day_df.to_csv(out_path, index=False)
     print(f"{day_str}: wrote {len(day_df)} rows to {out_path.name}")
 
-def transform_years(start_year: int, end_year: int, radius_m: float = 50_000, power: float = 2.0) -> None:
+def transform_years(start_year: int, end_year: int) -> None:
     """Run the transform for every day from start_year to end_year inclusive, skipping days whose outputs already exist."""
     raw_dir = config.ROOT / "raw" / "hrrr_mixing_height"
     out_dir = config.ROOT / "transform" / "hrrr_mixing_height"
@@ -104,6 +107,6 @@ def transform_years(start_year: int, end_year: int, radius_m: float = 50_000, po
     current = datetime(start_year, 1, 1)
     end = datetime(end_year, 12, 31)
     while current <= end:
-        transform_day(current, sites, raw_dir, out_dir, radius_m=radius_m, power=power)
+        transform_day(current, sites, raw_dir, out_dir, radius_m = _RADIUS_M, power=_POWER)
         current += timedelta(days=1)
         
