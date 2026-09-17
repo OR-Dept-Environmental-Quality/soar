@@ -12,4 +12,3 @@ from stage.consolidate_fct_mixing_height import run_consolidation
 
 if __name__ == "__main__":
     run_consolidation()
-
